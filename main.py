@@ -102,7 +102,7 @@ GLOBAL RULES FOR ALL PLANS:
 14. Maintain the correct role and tone for the selected plan.
 15. Every question should have a clear purpose: introduction, validation, technical check, project depth, scenario, or ownership.
 
-PLAN BEHAVIOR RULES (Strictly enforce the {plan.upper()} behavior below):
+PLAN BEHAVIOR RULES:
 
 FREE PLAN:
 - Role: Friendly AI Interview Coach
@@ -111,7 +111,6 @@ FREE PLAN:
 - Difficulty: Beginner only
 - Focus: Self-introduction, resume basics, simple project explanation, very basic HR and technical questions
 - Never ask architecture, scalability, trade-offs, optimization, or deep technical drill-down
-- If the candidate is silent, simplify gradually but remain interview-related
 - Keep responses under 25 words whenever possible
 
 STUDENT PLAN:
@@ -155,21 +154,7 @@ FOLLOW-UP RULES:
 - Do not over-explain what you want
 - Keep pressure proportional to the selected plan
 
-SILENCE / NO ANSWER RULES:
-- First silence: gently repeat or simplify the question
-- Second silence: make the question easier while staying interview-related
-- Third silence: move to a simpler but still relevant question
-- Do not keep saying "don't worry" repeatedly
-- Do not switch into random casual questions unrelated to interview preparation
-
-BAD BEHAVIOR TO AVOID:
-- Asking overly advanced questions in Free plan
-- Being too casual in Premium plan
-- Repeating the same question with too many words
-- Giving long motivational speeches
-- Asking confusing or multi-part questions
-- Making the candidate feel lost through jargon-heavy phrasing
-- Dropping the interview context during fallback
+Always act according to the selected plan and maintain consistent interview quality from start to finish.
 """
 
     if is_greeting:
@@ -213,7 +198,7 @@ Feedback format for "recommendations":
 - ✅ Strengths
 - ❌ Weak Areas
 - 📈 Simple Next Steps
-- 🔒 <strong style='color:#2563eb;'>Upgrade to Student or Pro</strong> to see your exact technical mistakes and get question-by-question corrections!
+- 🔒 <strong style='color:#2563eb;'>Upgrade to Student or Pro</strong> to see your exact technical mistakes!
 
 Keep the feedback easy to understand, supportive, and short.
 """
@@ -225,7 +210,6 @@ Task: Evaluate the candidate like a realistic campus placement interviewer.
 Rules:
 - If the student mostly stayed silent or did not answer, give marks = 0.
 - Return valid JSON only.
-- Score must be an integer from 0 to 100.
 
 Return exactly:
 {{
@@ -235,11 +219,9 @@ Return exactly:
 
 Feedback format for "recommendations":
 - ✅ Strengths
-- ❌ Mistakes / weak answers (Be specific about one technical error)
+- ❌ Mistakes / weak answers
 - 📈 Areas to improve before real interviews
-- 🔒 <strong style='color:#2563eb;'>Upgrade to Pro</strong> to unlock deep system-design feedback and weak-area analysis!
-
-Keep the feedback practical, clear, and placement-oriented.
+- 🔒 <strong style='color:#2563eb;'>Upgrade to Pro</strong> to unlock deep system-design feedback!
 """
     elif plan == "pro":
         return f"""
@@ -250,7 +232,6 @@ Rules:
 - If the candidate mostly stayed silent or did not answer, give marks = 0.
 - Return valid JSON only.
 - Score must be an integer from 0 to 100.
-- Do not give sympathy marks.
 
 Return exactly:
 {{
@@ -260,10 +241,8 @@ Return exactly:
 
 Feedback format for "recommendations":
 - ✅ Technical Strengths
-- ❌ Technical Mistakes (Point out exactly what they got wrong in their answers)
+- ❌ Technical Mistakes
 - 📈 Advanced Topics to Improve
-
-Be exact, realistic, and technically meaningful.
 """
     else: # premium
         return f"""
@@ -273,8 +252,6 @@ Task: Evaluate the candidate like a hiring panel assessing technical skill, prod
 Rules:
 - If the candidate mostly stayed silent or did not answer, give marks = 0.
 - Return valid JSON only.
-- Score must be an integer from 0 to 100.
-- Be realistic and strict.
 
 Return exactly:
 {{
@@ -287,8 +264,6 @@ Feedback format for "recommendations":
 - ❌ Gaps / Weaknesses
 - 📈 Priority Improvements
 - 🎯 Interview Readiness Level
-
-Make the feedback deep, personalized, and realistic.
 """
 
 
@@ -426,7 +401,7 @@ async def serve_index():
         with open(TEMPLATES_DIR / "index.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: index.html not found. Ensure it is in the 'templates' folder.</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: templates/index.html not found</h1>", status_code=404)
 
 
 @app.get("/interview/{session_id}", response_class=HTMLResponse)
@@ -438,7 +413,7 @@ async def serve_interview(session_id: str):
         with open(TEMPLATES_DIR / "interview.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: interview.html not found. Ensure it is in the 'templates' folder.</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: templates/interview.html not found</h1>", status_code=404)
 
 
 @app.post("/setup")
@@ -490,6 +465,7 @@ async def next_question(payload: AnswerPayload):
     ensure_session(payload.session_id)
 
     try:
+        # Await the response generator
         response_data = await get_ai_response(payload.session_id, payload.user_answer)
         return JSONResponse(content=response_data)
     except HTTPException:
@@ -519,7 +495,7 @@ async def terminate(session_id: str, payload: RejectPayload):
 
 
 # --------------------------------------------------
-# Local / Render Run
+# Render Start Block
 # --------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
