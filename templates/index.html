@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Mock Interviewer | Student Practice Portal</title>
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        :root {
+            --primary: #2563eb; 
+            --primary-hover: #1d4ed8; 
+            --primary-light: #eff6ff; 
+            --bg-main: #f4f7fb; 
+            --bg-card: #ffffff; 
+            --text-dark: #1e293b; 
+            --text-muted: #64748b; 
+            --border-color: #e2e8f0;
+            --success: #059669;
+            --danger: #dc2626;
+            
+            --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 10px 15px -3px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 20px 25px -5px rgba(15, 23, 42, 0.05);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 0;
+            color: var(--text-dark);
+            background-color: var(--bg-main);
+            line-height: 1.6;
+        }
+
+        /* Navigation Bar */
+        .navbar {
+            position: fixed; top: 0; width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            box-shadow: var(--shadow-sm); border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+            z-index: 1000; display: flex; justify-content: space-between; align-items: center;
+            padding: 0 5%; box-sizing: border-box; height: 75px; transition: all 0.3s ease;
+        }
+
+        .nav-brand {
+            font-size: 1.3rem; font-weight: 800; color: var(--primary);
+            display: flex; align-items: center; gap: 10px; letter-spacing: -0.5px;
+        }
+
+        .nav-links {
+            list-style: none; display: flex; gap: 30px; margin: 0; padding: 0; align-items: center;
+        }
+
+        .nav-links li a {
+            text-decoration: none; color: var(--text-muted); font-weight: 600;
+            font-size: 0.95rem; position: relative; padding-bottom: 6px; transition: color 0.3s ease;
+        }
+
+        .nav-links li a:hover, .nav-links li a.active { color: var(--primary); }
+
+        .nav-links li a::after {
+            content: ''; position: absolute; width: 0; height: 2px;
+            bottom: 0; left: 0; background-color: var(--primary);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 2px;
+        }
+
+        .nav-links li a:hover::after, .nav-links li a.active::after { width: 100%; }
+
+        .nav-cta {
+            background: var(--primary); color: white !important;
+            padding: 10px 24px; border-radius: 8px; font-weight: 600;
+            transition: all 0.3s ease !important; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+        }
+        .nav-cta::after { display: none !important; }
+        .nav-cta:hover {
+            background: var(--primary-hover); transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(37, 99, 235, 0.3);
+        }
+
+        /* Container & Sections */
+        .section { padding: 100px 5%; max-width: 1200px; margin: 0 auto; }
+        .section-light { background: var(--bg-main); }
+        .section-white { background: var(--bg-card); }
+
+        .section-title {
+            text-align: center; font-size: 2.2rem; color: var(--text-dark);
+            margin-bottom: 15px; font-weight: 800; letter-spacing: -0.5px;
+        }
+        .section-subtitle {
+            text-align: center; color: var(--text-muted); font-size: 1.1rem;
+            max-width: 700px; margin: 0 auto 50px auto;
+        }
+
+        /* Hero Section */
+        .hero { text-align: center; padding-top: 180px; padding-bottom: 80px; }
+        .hero h1 {
+            font-size: 3.8rem; line-height: 1.15; margin-bottom: 24px;
+            color: var(--text-dark); font-weight: 800; letter-spacing: -1px;
+        }
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--primary), #0ea5e9);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            font-size: 1.25rem; color: var(--text-muted); max-width: 650px; margin: 0 auto 40px auto;
+        }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: center; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 30px; }
+
+        /* Feature Cards */
+        .card {
+            background: var(--bg-card); padding: 35px; border-radius: 16px;
+            border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card:hover {
+            transform: translateY(-8px); box-shadow: var(--shadow-md);
+            border-color: rgba(37, 99, 235, 0.3);
+        }
+        .card-icon {
+            background: var(--primary-light); color: var(--primary);
+            width: 56px; height: 56px; border-radius: 14px; display: flex;
+            align-items: center; justify-content: center; margin-bottom: 24px;
+        }
+        .card h3 { margin: 0 0 12px 0; font-size: 1.25rem; font-weight: 700; color: var(--text-dark); }
+        .card p { margin: 0; color: var(--text-muted); font-size: 1rem; line-height: 1.6; }
+
+        /* Steps / How it works */
+        .step-item {
+            display: flex; gap: 24px; margin-bottom: 30px; background: var(--bg-card);
+            padding: 24px; border-radius: 16px; border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm); transition: all 0.3s ease;
+        }
+        .step-item:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+        .step-number {
+            background: var(--primary); color: white; width: 48px; height: 48px;
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 1.3rem; flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+        }
+        .step-content h4 { margin: 0 0 8px 0; font-size: 1.15rem; color: var(--text-dark); }
+        .step-content p { margin: 0; color: var(--text-muted); font-size: 1rem; }
+
+        /* Pricing UI (New 4 Buttons & Cards) */
+        .pricing-controls {
+            display: flex; justify-content: center; gap: 10px; margin-bottom: 40px;
+            background: var(--bg-card); padding: 8px; border-radius: 16px;
+            box-shadow: var(--shadow-sm); border: 1px solid var(--border-color);
+            max-width: 650px; margin-left: auto; margin-right: auto;
+            flex-wrap: wrap;
+        }
+        .pricing-btn {
+            flex: 1; padding: 14px 20px; border: none; background: transparent;
+            font-weight: 700; font-size: 1.05rem; color: var(--text-muted);
+            border-radius: 10px; cursor: pointer; transition: all 0.3s ease;
+            min-width: 120px; text-align: center;
+        }
+        .pricing-btn:hover { color: var(--primary); }
+        .pricing-btn.active {
+            background: var(--primary); color: white; box-shadow: 0 4px 10px rgba(37,99,235,0.25);
+        }
+        .pricing-view { display: none; animation: fadeIn 0.4s ease; }
+        .pricing-view.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .pricing-box {
+            background: var(--bg-card); border: 2px solid var(--border-color);
+            border-radius: 24px; padding: 50px; box-shadow: var(--shadow-md);
+            max-width: 550px; margin: 0 auto; text-align: left; transition: all 0.3s ease;
+        }
+        .pricing-box.featured { border-color: var(--primary); box-shadow: var(--shadow-lg); }
+        .pricing-header { text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 25px; margin-bottom: 25px; }
+        .pricing-header h3 { font-size: 2rem; margin: 0 0 10px 0; color: var(--text-dark); }
+        .pricing-header .price { font-size: 3.5rem; font-weight: 800; color: var(--primary); margin: 0; line-height: 1; }
+        .pricing-header .price span { font-size: 1.2rem; color: var(--text-muted); font-weight: 500; }
+        .pricing-list { list-style: none; padding: 0; margin: 0; }
+        .pricing-list li { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; font-size: 1.05rem; color: var(--text-dark); }
+        .pricing-list i { margin-top: 3px; }
+
+        /* Setup/Interactive Section */
+        .setup-container {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 24px; padding: 60px; box-shadow: var(--shadow-lg);
+            max-width: 850px; margin: 0 auto;
+        }
+
+        /* Privacy Policy & Hardware Notice Box */
+        .privacy-notice {
+            background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;
+            padding: 20px 24px; margin-bottom: 35px; display: flex; gap: 16px;
+            align-items: flex-start; text-align: left;
+        }
+        .privacy-notice-icon { color: #16a34a; flex-shrink: 0; margin-top: 2px; }
+        .privacy-notice-content h4 { margin: 0 0 8px 0; color: #15803d; font-size: 1.1rem; font-weight: 700; }
+        .privacy-notice-content p { margin: 0; color: #166534; font-size: 0.95rem; line-height: 1.5; }
+
+        .input-label { display: block; margin-bottom: 10px; color: var(--text-dark); font-weight: 700; font-size: 1rem; }
+
+        .custom-select {
+            width: 100%; padding: 16px 20px; background: var(--bg-main); color: var(--text-dark);
+            border: 2px solid var(--border-color); border-radius: 12px; font-size: 1.05rem;
+            font-weight: 500; outline: none; cursor: pointer; appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat; background-position: right 20px top 50%;
+            background-size: 12px auto; transition: all 0.3s ease; margin-bottom: 30px;
+        }
+        .custom-select:hover, .custom-select:focus { 
+            border-color: var(--primary); background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .file-upload-wrapper {
+            position: relative; width: 100%; height: 140px;
+            border: 2px dashed rgba(37, 99, 235, 0.4); border-radius: 12px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: var(--primary-light); transition: all 0.3s ease; cursor: pointer; margin-bottom: 35px;
+        }
+        .file-upload-wrapper:hover { background: #dbeafe; border-color: var(--primary); }
+        .file-upload-wrapper input[type="file"] { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+        .btn {
+            background: var(--primary); color: white; border: none; padding: 16px 32px;
+            font-size: 1.1rem; border-radius: 10px; cursor: pointer; font-weight: 600;
+            display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-decoration: none;
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+        }
+        .btn:hover {
+            background: var(--primary-hover); transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
+        }
+        .btn-large { width: 100%; padding: 20px; font-size: 1.2rem; }
+        .btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
+
+        #linkContainer {
+            margin-top: 30px; padding: 30px; background: #ecfdf5;
+            border: 1px solid var(--success); border-radius: 12px; text-align: center; display: none;
+        }
+        #linkContainer p { color: #064e3b; font-weight: 800; margin-top: 0; font-size: 1.2rem; }
+        #interviewLink {
+            display: inline-block; margin-top: 20px; padding: 14px 28px;
+            background: var(--success); color: #fff; text-decoration: none;
+            font-weight: 700; border-radius: 8px; transition: 0.3s;
+            box-shadow: 0 4px 6px rgba(5, 150, 105, 0.2);
+        }
+        #interviewLink:hover { 
+            background: #047857; box-shadow: 0 8px 15px rgba(5, 150, 105, 0.3); transform: translateY(-2px);
+        }
+
+        ul.bullet-list { padding-left: 20px; color: var(--text-muted); }
+        ul.bullet-list li { margin-bottom: 12px; }
+
+    </style>
+</head>
+<body>
+
+    <nav class="navbar" id="navbar">
+        <div class="nav-brand">
+            <i data-lucide="bot" style="width: 28px; height: 28px;"></i> MockAI
+        </div>
+        <ul class="nav-links">
+            <li><a href="#home" class="nav-item active">Home</a></li>
+            <li><a href="#about" class="nav-item">Why Practice?</a></li>
+            <li><a href="#features" class="nav-item">Features</a></li>
+            <li><a href="#setup" class="nav-item">Upload Resume</a></li>
+            <li><a href="#pricing" class="nav-cta">Pricing Plans</a></li>
+        </ul>
+    </nav>
+
+    <section id="home" class="section section-light hero">
+        <h1>Turn your resume into a<br><span>real interview practice</span> experience.</h1>
+        <p>Practice real interviews. Improve your answers. Build confidence.<br>AI Mock Interviewer helps students prepare for real interviews by analyzing their resume and giving a final score with feedback.</p>
+        <a href="#setup" class="btn">Start Mock Interview <i data-lucide="arrow-right"></i></a>
+    </section>
+
+    <section id="about" class="section section-white">
+        <div class="grid-2">
+            <div>
+                <h2 class="section-title" style="text-align: left; margin-bottom: 25px;">Why this project matters</h2>
+                <p style="color: var(--text-dark); font-size: 1.15rem; margin-bottom: 20px; font-weight: 500;">
+                    Getting a job is not only about having a good resume. It is also about answering well in the interview.
+                </p>
+                <p style="color: var(--text-muted); font-size: 1.05rem;">Many students struggle in interviews because they:</p>
+                <ul class="bullet-list" style="font-size: 1.05rem;">
+                    <li>Do not know what kind of questions will be asked.</li>
+                    <li>Find it hard to answer tricky and in-depth questions.</li>
+                    <li>Feel nervous during interviews.</li>
+                    <li>Do not get proper feedback after practice.</li>
+                </ul>
+                <p style="font-weight: 700; color: var(--primary); margin-top: 25px; font-size: 1.1rem;">
+                    This project was built to solve that problem. It gives students a smarter way to practice before attending real interviews.
+                </p>
+            </div>
+            <div style="background: var(--bg-main); padding: 45px; border-radius: 24px; border: 1px solid var(--border-color);">
+                <h3 style="color: var(--text-dark); font-size: 1.5rem; margin-top: 0; margin-bottom: 20px;">Main Goal & Benefits</h3>
+                <p style="color: var(--text-muted);"><strong>Goal:</strong> To help students become more confident, more prepared, and more successful in real interviews.</p>
+                <p style="color: var(--text-muted); margin-top: 20px;">This is not just a question-answer tool. It is a practice platform that helps you:</p>
+                <ul class="bullet-list">
+                    <li>Prepare for real interviews</li>
+                    <li>Improve confidence</li>
+                    <li>Handle difficult questions</li>
+                    <li>Understand your weak points</li>
+                    <li>Perform better in placements</li>
+                </ul>
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                    <p style="margin: 0; font-weight: 700; color: var(--text-dark);">Perfect for: <span style="font-weight: 500; color: var(--text-muted);">Students, Freshers, Internship seekers, and Job seekers.</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="section section-light">
+        <h2 class="section-title">What this AI Interviewer does</h2>
+        <p class="section-subtitle">A complete suite of tools to simulate a real-world technical interview environment.</p>
+        
+        <div class="grid-3">
+            <div class="card">
+                <div class="card-icon"><i data-lucide="file-search" style="width: 28px; height: 28px;"></i></div>
+                <h3>Analyzes Resume</h3>
+                <p>Reads your uploaded resume and understands your exact skills, projects, and background.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i data-lucide="message-square" style="width: 28px; height: 28px;"></i></div>
+                <h3>Generates Questions</h3>
+                <p>Creates role-based, unique interview questions directly related to your tech stack.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i data-lucide="video" style="width: 28px; height: 28px;"></i></div>
+                <h3>Realistic Mock Interview</h3>
+                <p>Conducts a back-and-forth verbal interview using advanced voice AI.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i data-lucide="scan-face" style="width: 28px; height: 28px;"></i></div>
+                <h3>Visibility Monitoring</h3>
+                <p>Detects if your face is not visible and gives proctoring warnings for turning left or right.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i data-lucide="bar-chart" style="width: 28px; height: 28px;"></i></div>
+                <h3>Evaluates Performance</h3>
+                <p>Shows a final score and detailed feedback at the end to highlight areas for improvement.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="how-it-works" class="section section-white">
+        <h2 class="section-title">How it works</h2>
+        <p class="section-subtitle">Follow these simple steps to start your practice session.</p>
+
+        <div style="max-width: 850px; margin: 0 auto;">
+            <div class="step-item">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h4>Upload Your Resume</h4>
+                    <p>The system reads your resume and understands your profile securely.</p>
+                </div>
+            </div>
+            <div class="step-item">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h4>Start the Interview</h4>
+                    <p>The AI asks questions based on your skills, projects, and experience.</p>
+                </div>
+            </div>
+            <div class="step-item">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h4>Answer in Real Time</h4>
+                    <p>Students answer using their microphone as if they are attending a real interview.</p>
+                </div>
+            </div>
+            <div class="step-item">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <h4>Face Visibility Monitoring</h4>
+                    <p>The system checks interview presence and gives warnings when needed.</p>
+                </div>
+            </div>
+            <div class="step-item">
+                <div class="step-number">5</div>
+                <div class="step-content">
+                    <h4>Get Final Feedback</h4>
+                    <p>At the end of the interview, students receive a score and performance feedback to improve.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="setup" class="section section-light">
+        <div class="setup-container">
+            <h2 class="section-title">Ready to begin?</h2>
+            <p class="section-subtitle">Set your duration, upload your resume, and generate your secure portal link.</p>
+
+            <div class="privacy-notice">
+                <div class="privacy-notice-icon">
+                    <i data-lucide="shield-check" style="width: 28px; height: 28px;"></i>
+                </div>
+                <div class="privacy-notice-content">
+                    <h4>Privacy & Security Guaranteed</h4>
+                    <p>Have doubts about turning on your camera or screen share? Don't worry! <strong>The camera, screen, and data only deal with your computer locally.</strong> Once the interview ends, the system will automatically turn off your camera, microphone, and stop screen sharing so you can fully relax.</p>
+                </div>
+            </div>
+
+            <form id="setupForm">
+                <label class="input-label" for="durationSelect">Interview Duration</label>
+                <select id="durationSelect" class="custom-select">
+                    <option value="5">5 Minutes (Quick Practice)</option>
+                    <option value="10" selected>10 Minutes (Standard)</option>
+                    <option value="15">15 Minutes (In-Depth)</option>
+                    <option value="20">20 Minutes (Advanced)</option>
+                    <option value="30">30 Minutes (Full Interview)</option>
+                </select>
+
+                <label class="input-label" for="resumeFile">Upload Resume (PDF Only)</label>
+                <div class="file-upload-wrapper">
+                    <i data-lucide="upload-cloud" style="width: 48px; height: 48px; color: var(--primary);"></i>
+                    <div style="color: var(--primary); font-weight: 600; font-size: 1.1rem; margin-top: 15px;" id="fileNameDisplay">Click or drag PDF here</div>
+                    <div style="color: var(--text-muted); font-size: 0.9rem; margin-top: 5px;">Max file size: 5MB</div>
+                    <input type="file" id="resumeFile" accept=".pdf" required>
+                </div>
+                
+                <button type="submit" id="generateBtn" class="btn btn-large">
+                    Get Interview Score & Link <i data-lucide="arrow-right"></i>
+                </button>
+            </form>
+
+            <div id="linkContainer">
+                <p><i data-lucide="check-circle" style="vertical-align: middle; margin-right: 8px;"></i> Success! Your portal is ready.</p>
+                <span style="color: var(--text-muted); font-size: 1rem;">Your duration and context have been saved securely.</span><br>
+                <a id="interviewLink" href="#" target="_self">Start Mock Interview</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="pricing" class="section section-white">
+        <h2 class="section-title">Affordable, Student-Friendly Pricing</h2>
+        <p class="section-subtitle">Start for free, or upgrade to unlock serious placement preparation tools.</p>
+
+        <div class="pricing-controls">
+            <button class="pricing-btn active" onclick="switchPricing('free', this)">Free</button>
+            <button class="pricing-btn" onclick="switchPricing('student', this)">Student</button>
+            <button class="pricing-btn" onclick="switchPricing('pro', this)">Pro</button>
+            <button class="pricing-btn" onclick="switchPricing('premium', this)">Premium</button>
+        </div>
+
+        <div id="plan-free" class="pricing-view active">
+            <div class="pricing-box">
+                <div class="pricing-header">
+                    <h3>Free Tier</h3>
+                    <p style="color: var(--text-muted); margin-top: 0;">Good for trying the product & building trust.</p>
+                    <p class="price">₹0<span> / forever</span></p>
+                </div>
+                <ul class="pricing-list">
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> 1 mock interview per week</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> 5–7 basic questions only</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Basic overall score</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Limited performance feedback</li>
+                    <li><i data-lucide="x-circle" style="color: var(--danger);"></i> No detailed analytics or error breakdown</li>
+                    <li><i data-lucide="x-circle" style="color: var(--danger);"></i> No downloadable reports</li>
+                </ul>
+                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('free', this)" data-original-text="Select Free Plan" style="width: 100%; margin-top: 30px; background: var(--text-dark);">Select Free Plan</button>
+            </div>
+        </div>
+
+        <div id="plan-student" class="pricing-view">
+            <div class="pricing-box featured">
+                <div class="pricing-header">
+                    <h3>Student Plan</h3>
+                    <p style="color: var(--text-muted); margin-top: 0;">Best for students with a small budget.</p>
+                    <p class="price">₹99<span> / month</span></p>
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">Or ₹999 / year</p>
+                </div>
+                <ul class="pricing-list">
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> 8 mock interviews per month</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Resume-based custom questions</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Tricky and in-depth questioning</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Score + Basic Performance Feedback</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Face visibility warnings & Proctoring</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Interview history dashboard</li>
+                </ul>
+                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('student', this)" data-original-text="Upgrade to Student" style="width: 100%; margin-top: 30px;">Upgrade to Student</button>
+            </div>
+        </div>
+
+        <div id="plan-pro" class="pricing-view">
+            <div class="pricing-box">
+                <div class="pricing-header">
+                    <h3>Pro Plan</h3>
+                    <p style="color: var(--text-muted); margin-top: 0;">For serious placement preparation.</p>
+                    <p class="price">₹299<span> / month</span></p>
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">Or ₹2999 / year</p>
+                </div>
+                <ul class="pricing-list">
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> 30 mock interviews per month</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Advanced interview feedback & Mistake analysis</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Technical + HR interview modes</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Role-based interview tracks</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Weak-area analysis & Suggestions</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Downloadable PDF reports & Progress tracking</li>
+                </ul>
+                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('pro', this)" data-original-text="Upgrade to Pro" style="width: 100%; margin-top: 30px;">Upgrade to Pro</button>
+            </div>
+        </div>
+
+        <div id="plan-premium" class="pricing-view">
+            <div class="pricing-box">
+                <div class="pricing-header">
+                    <h3>Premium / Career</h3>
+                    <p style="color: var(--text-muted); margin-top: 0;">The ultimate job-winning arsenal.</p>
+                    <p class="price">₹799<span> / month</span></p>
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">Or ₹7999 / year</p>
+                </div>
+                <ul class="pricing-list">
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Unlimited mock interviews</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Company-specific interview simulations</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Custom job-role interviews</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Deep speech and answer quality analytics</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Personalized improvement roadmap</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Priority processing & Premium support</li>
+                </ul>
+                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('premium', this)" data-original-text="Unlock Premium" style="width: 100%; margin-top: 30px; background: var(--text-dark);">Unlock Premium</button>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        lucide.createIcons();
+
+        // Navbar Scroll Shadow & Active Link Highlighting
+        const navbar = document.getElementById("navbar");
+        const sections = document.querySelectorAll("section");
+        const navItems = document.querySelectorAll(".nav-item, .nav-cta");
+
+        window.addEventListener("scroll", () => {
+            if (window.scrollY > 20) {
+                navbar.style.boxShadow = "0 4px 6px -1px rgba(0,0,0,0.1)";
+            } else {
+                navbar.style.boxShadow = "0 2px 4px rgba(15, 23, 42, 0.04)";
+            }
+
+            let current = "";
+            sections.forEach((section) => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 200) {
+                    current = section.getAttribute("id");
+                }
+            });
+
+            navItems.forEach((li) => {
+                li.classList.remove("active");
+                if (li.getAttribute("href") === `#${current}`) {
+                    li.classList.add("active");
+                }
+            });
+        });
+
+        function switchPricing(planId, btnElement) {
+            document.querySelectorAll('.pricing-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+
+            document.querySelectorAll('.pricing-view').forEach(view => view.classList.remove('active'));
+            document.getElementById('plan-' + planId).classList.add('active');
+            
+            lucide.createIcons();
+        }
+
+        function selectActivePlan(planName, btnElement) {
+            localStorage.setItem('selectedPlan', planName);
+
+            const allCtaBtns = document.querySelectorAll('.pricing-cta-btn');
+            allCtaBtns.forEach(btn => {
+                const defaultText = btn.getAttribute('data-original-text');
+                btn.innerHTML = defaultText;
+                btn.style.opacity = '1';
+            });
+
+            btnElement.innerHTML = `<i data-lucide="check-circle"></i> Plan Selected`;
+            lucide.createIcons();
+
+            alert(`Success! You have selected the ${planName.toUpperCase()} plan. This preference has been saved.`);
+        }
+
+        const fileInput = document.getElementById('resumeFile');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                fileNameDisplay.innerHTML = `Selected: <span style="color: var(--text-dark);">${e.target.files[0].name}</span>`;
+            }
+        });
+
+        document.getElementById('setupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('generateBtn');
+            const duration = document.getElementById('durationSelect').value;
+            
+            if (!fileInput.files[0]) return alert("Please upload a PDF resume.");
+            
+            localStorage.setItem('interviewDuration', duration);
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="lucide-spin"></i> Preparing AI...';
+            lucide.createIcons();
+
+            const formData = new FormData();
+            formData.append('resume_file', fileInput.files[0]);
+            
+            // Sending the plan parameter to FastAPI
+            formData.append('plan', localStorage.getItem('selectedPlan') || 'free');
+
+            try {
+                const response = await fetch('/setup', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (data.interview_link) {
+                    const linkEl = document.getElementById('interviewLink');
+                    linkEl.href = data.interview_link;
+                    
+                    document.getElementById('setupForm').style.display = 'none';
+                    document.getElementById('linkContainer').style.display = 'block';
+                } else {
+                    alert("Error establishing connection.");
+                    resetButton(btn);
+                }
+            } catch (err) {
+                alert("Server error. Please ensure your Python backend is running.");
+                resetButton(btn);
+            }
+        });
+
+        function resetButton(btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'Get Interview Score & Link <i data-lucide="arrow-right"></i>';
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
