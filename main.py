@@ -2,7 +2,6 @@ import os
 import io
 import json
 import uuid
-import asyncio
 import traceback
 from typing import Dict, Any
 from pathlib import Path
@@ -42,6 +41,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# INIT FIX: Use Async client for fast simultaneous users
+client = AsyncGroq(api_key=GROQ_API_KEY)
 
 # In-memory session store
 sessions: Dict[str, Dict[str, Any]] = {}
@@ -294,10 +296,6 @@ Make the feedback deep, personalized, and realistic.
 # Execution Utilities (ASYNC)
 # --------------------------------------------------
 async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = False) -> str:
-    # BUG FIX: Initialize AsyncGroq INSIDE the function to prevent "Event Loop Closed" errors 
-    # when starting up on Windows/Colab environments.
-    client = AsyncGroq(api_key=GROQ_API_KEY)
-    
     kwargs = {
         "model": DEFAULT_MODEL,
         "messages": messages,
@@ -306,32 +304,19 @@ async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = Fal
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
-    try:
-        # Added timeout protection to prevent hanging sessions
-        response = await asyncio.wait_for(client.chat.completions.create(**kwargs), timeout=30.0)
-        return response.choices[0].message.content.strip()
-    except asyncio.TimeoutError:
-        return "I lost connection for a moment. Please repeat your answer."
-    except Exception as e:
-        print(f"Groq API Error: {e}")
-        return "System error. Please try again."
+    # Fix: Awaiting the async groq client ensures the server isn't blocked and handles users fast
+    response = await client.chat.completions.create(**kwargs)
+    return response.choices[0].message.content.strip()
 
-def extract_pdf_text_sync(pdf_bytes: bytes) -> str:
-    """Synchronous core for PDF extraction."""
+
+def extract_pdf_text(pdf_bytes: bytes) -> str:
     try:
         reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n".join([p for p in pages if p]).strip()
     except Exception as e:
-        return f"ERROR:{str(e)}"
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(e)}")
 
-async def extract_pdf_text(pdf_bytes: bytes) -> str:
-    """Asynchronous wrapper to prevent Event Loop blocking during heavy PDF parsing."""
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, extract_pdf_text_sync, pdf_bytes)
-    if result.startswith("ERROR:"):
-        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {result[6:]}")
-    return result
 
 def ensure_session(session_id: str) -> Dict[str, Any]:
     session = sessions.get(session_id)
@@ -339,17 +324,11 @@ def ensure_session(session_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Invalid or expired session.")
     return session
 
+
 def safe_json_loads(raw_text: str) -> Dict[str, Any]:
     try:
-        # Prevent markdown markdown wrapper crashes with more robust stripping
-        cleaned_text = raw_text.strip()
-        if cleaned_text.startswith("```json"):
-            cleaned_text = cleaned_text.split("```json")[1].split("```")[0].strip()
-        elif cleaned_text.startswith("```"):
-            cleaned_text = cleaned_text.split("```")[1].strip()
-        return json.loads(cleaned_text)
-    except Exception as e:
-        print(f"JSON Parse Error: {e} - Raw Data: {raw_text[:100]}")
+        return json.loads(raw_text)
+    except Exception:
         return {}
 
 
@@ -363,6 +342,7 @@ async def finish_interview(session_id: str) -> Dict[str, Any]:
     prompt = get_evaluation_prompt(plan, session["resume"], session["history"])
 
     try:
+        # Await the groq call
         raw = await call_groq(
             [{"role": "system", "content": prompt}],
             temperature=0.2,
@@ -426,6 +406,7 @@ async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
     
     messages = [{"role": "system", "content": system_prompt}] + session["history"]
 
+    # Await the groq call to prevent lag
     ai_msg = await call_groq(messages, temperature=cfg["temperature"])
     session["history"].append({"role": "assistant", "content": ai_msg})
 
@@ -444,12 +425,10 @@ async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     try:
-        # Support both 'templates' directory or root directory based on deployment
-        path = TEMPLATES_DIR / "index.html" if os.path.exists(TEMPLATES_DIR / "index.html") else "index.html"
-        with open(path, "r", encoding="utf-8") as f:
+        with open(TEMPLATES_DIR / "index.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: index.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: templates/index.html not found</h1>", status_code=404)
 
 
 @app.get("/interview/{session_id}", response_class=HTMLResponse)
@@ -458,11 +437,10 @@ async def serve_interview(session_id: str):
         return HTMLResponse("<h1>Session expired or invalid.</h1>", status_code=404)
 
     try:
-        path = TEMPLATES_DIR / "interview.html" if os.path.exists(TEMPLATES_DIR / "interview.html") else "interview.html"
-        with open(path, "r", encoding="utf-8") as f:
+        with open(TEMPLATES_DIR / "interview.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: interview.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: templates/interview.html not found</h1>", status_code=404)
 
 
 @app.post("/setup")
@@ -486,11 +464,7 @@ async def setup_interview(
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # Added size protection check without altering original structure
-    if len(pdf_bytes) > 4 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="PDF is too large (Max 4MB).")
-
-    resume_text = await extract_pdf_text(pdf_bytes)
+    resume_text = extract_pdf_text(pdf_bytes)
     if not resume_text:
         raise HTTPException(status_code=400, detail="Could not extract text from the resume PDF.")
 
@@ -518,6 +492,7 @@ async def next_question(payload: AnswerPayload):
     ensure_session(payload.session_id)
 
     try:
+        # Await the response generator
         response_data = await get_ai_response(payload.session_id, payload.user_answer)
         return JSONResponse(content=response_data)
     except HTTPException:
