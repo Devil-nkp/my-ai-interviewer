@@ -12,14 +12,15 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
-# IMPORT FIX: Upgraded to AsyncGroq to eliminate server blocking and fix lag
+# Using AsyncGroq for lag-free, non-blocking execution
 from groq import AsyncGroq
 from pydantic import BaseModel, Field
 
 # --------------------------------------------------
-# Path Configuration for Vercel
+# Path Configuration for Render
 # --------------------------------------------------
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Assumes main.py is in the root directory alongside the templates/ folder
+BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 
 # --------------------------------------------------
@@ -41,7 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# INIT FIX: Use Async client
+# Async client for fast, simultaneous user handling
 client = AsyncGroq(api_key=GROQ_API_KEY)
 
 # In-memory session store
@@ -76,8 +77,7 @@ def get_conversational_prompt(plan: str, resume_text: str, is_greeting: bool) ->
     """Returns the unified, highly-tuned conversational system prompt."""
     
     master_prompt = f"""
-You are an AI Mock Interviewer. Your job is to conduct realistic interview practice based on the candidate’s resume and the selected plan: Free, Student, Pro, or Premium.
-
+You are an AI Mock Interviewer. Your job is to conduct realistic interview practice based on the candidate’s resume and the selected plan.
 Your core goal is to make the interview experience feel correct for the selected plan, while keeping the conversation clear, natural, structured, and useful.
 
 CURRENT ACTIVE PLAN: {plan.upper()}
@@ -170,17 +170,6 @@ BAD BEHAVIOR TO AVOID:
 - Asking confusing or multi-part questions
 - Making the candidate feel lost through jargon-heavy phrasing
 - Dropping the interview context during fallback
-
-GOOD BEHAVIOR TO FOLLOW:
-- Be clear
-- Be structured
-- Be plan-appropriate
-- Be realistic
-- Be concise
-- Be adaptive
-- Keep every question purposeful
-
-Always act according to the selected plan and maintain consistent interview quality from start to finish.
 """
 
     if is_greeting:
@@ -304,7 +293,7 @@ Make the feedback deep, personalized, and realistic.
 
 
 # --------------------------------------------------
-# Execution Utilities (NOW ASYNC)
+# Execution Utilities (ASYNC)
 # --------------------------------------------------
 async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = False) -> str:
     kwargs = {
@@ -315,7 +304,7 @@ async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = Fal
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
-    # FIX: Awaiting the async groq client ensures the server isn't blocked
+    # Prevents server lag by awaiting the external API call
     response = await client.chat.completions.create(**kwargs)
     return response.choices[0].message.content.strip()
 
@@ -344,7 +333,7 @@ def safe_json_loads(raw_text: str) -> Dict[str, Any]:
 
 
 # --------------------------------------------------
-# Core Interview Engine (NOW ASYNC)
+# Core Interview Engine (ASYNC)
 # --------------------------------------------------
 async def finish_interview(session_id: str) -> Dict[str, Any]:
     session = ensure_session(session_id)
@@ -353,7 +342,6 @@ async def finish_interview(session_id: str) -> Dict[str, Any]:
     prompt = get_evaluation_prompt(plan, session["resume"], session["history"])
 
     try:
-        # Await the groq call
         raw = await call_groq(
             [{"role": "system", "content": prompt}],
             temperature=0.2,
@@ -417,7 +405,6 @@ async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
     
     messages = [{"role": "system", "content": system_prompt}] + session["history"]
 
-    # Await the groq call to prevent lag
     ai_msg = await call_groq(messages, temperature=cfg["temperature"])
     session["history"].append({"role": "assistant", "content": ai_msg})
 
@@ -503,7 +490,6 @@ async def next_question(payload: AnswerPayload):
     ensure_session(payload.session_id)
 
     try:
-        # Await the response generator
         response_data = await get_ai_response(payload.session_id, payload.user_answer)
         return JSONResponse(content=response_data)
     except HTTPException:
@@ -533,7 +519,7 @@ async def terminate(session_id: str, payload: RejectPayload):
 
 
 # --------------------------------------------------
-# Local Run
+# Local / Render Run
 # --------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
