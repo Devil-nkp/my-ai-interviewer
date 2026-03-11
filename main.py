@@ -2,6 +2,7 @@ import os
 import io
 import json
 import uuid
+import asyncio
 import traceback
 from typing import Dict, Any
 from pathlib import Path
@@ -309,18 +310,32 @@ async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = Fal
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
-    response = await client.chat.completions.create(**kwargs)
-    return response.choices[0].message.content.strip()
+    try:
+        # Added timeout protection to prevent hanging sessions
+        response = await asyncio.wait_for(client.chat.completions.create(**kwargs), timeout=30.0)
+        return response.choices[0].message.content.strip()
+    except asyncio.TimeoutError:
+        return "I lost connection for a moment. Please repeat your answer."
+    except Exception as e:
+        print(f"Groq API Error: {e}")
+        return "System error. Please try again."
 
-
-def extract_pdf_text(pdf_bytes: bytes) -> str:
+def extract_pdf_text_sync(pdf_bytes: bytes) -> str:
+    """Synchronous core for PDF extraction."""
     try:
         reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n".join([p for p in pages if p]).strip()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(e)}")
+        return f"ERROR:{str(e)}"
 
+async def extract_pdf_text(pdf_bytes: bytes) -> str:
+    """Asynchronous wrapper to prevent Event Loop blocking during heavy PDF parsing."""
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, extract_pdf_text_sync, pdf_bytes)
+    if result.startswith("ERROR:"):
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {result[6:]}")
+    return result
 
 def ensure_session(session_id: str) -> Dict[str, Any]:
     session = sessions.get(session_id)
@@ -328,16 +343,17 @@ def ensure_session(session_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Invalid or expired session.")
     return session
 
-
 def safe_json_loads(raw_text: str) -> Dict[str, Any]:
     try:
-        # Prevent markdown markdown wrapper crashes
-        if raw_text.startswith("```json"):
-            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-        elif raw_text.startswith("```"):
-            raw_text = raw_text.split("```")[1].strip()
-        return json.loads(raw_text)
-    except Exception:
+        # Prevent markdown markdown wrapper crashes with more robust stripping
+        cleaned_text = raw_text.strip()
+        if cleaned_text.startswith("```json"):
+            cleaned_text = cleaned_text.split("```json")[1].split("```")[0].strip()
+        elif cleaned_text.startswith("```"):
+            cleaned_text = cleaned_text.split("```")[1].strip()
+        return json.loads(cleaned_text)
+    except Exception as e:
+        print(f"JSON Parse Error: {e} - Raw Data: {raw_text[:100]}")
         return {}
 
 
@@ -474,7 +490,11 @@ async def setup_interview(
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    resume_text = extract_pdf_text(pdf_bytes)
+    # Added size protection check without altering original structure
+    if len(pdf_bytes) > 4 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF is too large (Max 4MB).")
+
+    resume_text = await extract_pdf_text(pdf_bytes)
     if not resume_text:
         raise HTTPException(status_code=400, detail="Could not extract text from the resume PDF.")
 
