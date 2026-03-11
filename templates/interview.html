@@ -1,633 +1,632 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neural Interview Portal | Secure Environment</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Interview Portal | Secure Environment</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-    <style>
-        :root {
-            /* Corporate Professional Palette */
-            --primary: #2563eb; 
-            --primary-hover: #1d4ed8; 
-            --primary-light: #eff6ff; 
-            --bg-main: #f4f7fb; 
-            --bg-card: #ffffff; 
-            --text-dark: #1e293b; 
-            --text-muted: #64748b; 
-            --border-color: #e2e8f0;
-            --success: #059669;
-            --success-light: #ecfdf5;
-            --danger: #dc2626;
-            --danger-light: #fef2f2;
-            --warning: #d97706;
-            
-            --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.04);
-            --shadow-md: 0 10px 15px -3px rgba(15, 23, 42, 0.08);
-            --shadow-lg: 0 20px 25px -5px rgba(15, 23, 42, 0.05);
-        }
+    <style>
+        :root {
+            /* Corporate Professional Palette */
+            --primary: #2563eb; 
+            --primary-hover: #1d4ed8; 
+            --primary-light: #eff6ff; 
+            --bg-main: #f4f7fb; 
+            --bg-card: #ffffff; 
+            --text-dark: #1e293b; 
+            --text-muted: #64748b; 
+            --border-color: #e2e8f0;
+            --success: #059669;
+            --success-light: #ecfdf5;
+            --danger: #dc2626;
+            --danger-light: #fef2f2;
+            --warning: #d97706;
+            
+            --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 10px 15px -3px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 20px 25px -5px rgba(15, 23, 42, 0.05);
+        }
 
-        * { box-sizing: border-box; outline: none; }
+        * { box-sizing: border-box; outline: none; }
 
-        body { 
-            font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
-            background-color: var(--bg-main); 
-            color: var(--text-dark); 
-            margin: 0; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            min-height: 100vh; 
-            /* SCROLL FIX APPLIED HERE */
-            overflow-x: hidden;
-            overflow-y: auto; 
-            padding-bottom: 80px;
-        }
+        body { 
+            font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            background-color: var(--bg-main); 
+            color: var(--text-dark); 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh; 
+            /* SCROLL FIX APPLIED HERE */
+            overflow-x: hidden;
+            overflow-y: auto; 
+            padding-bottom: 80px;
+        }
 
-        #bgVideo { 
-            position: fixed; top: 0; left: 0; min-width: 100%; min-height: 100%; 
-            z-index: -1; object-fit: cover; opacity: 0.04; filter: grayscale(100%);
-        }
+        #bgVideo { 
+            position: fixed; top: 0; left: 0; min-width: 100%; min-height: 100%; 
+            z-index: -1; object-fit: cover; opacity: 0.04; filter: grayscale(100%);
+        }
 
-        /* Top Navigation Status Bar */
-        .status-bar {
-            position: fixed; top: 0; left: 0; width: 100%; height: 75px;
-            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-color); box-shadow: var(--shadow-sm);
-            display: flex; justify-content: space-between; align-items: center; padding: 0 5%;
-            z-index: 100;
-        }
+        /* Top Navigation Status Bar */
+        .status-bar {
+            position: fixed; top: 0; left: 0; width: 100%; height: 75px;
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color); box-shadow: var(--shadow-sm);
+            display: flex; justify-content: space-between; align-items: center; padding: 0 5%;
+            z-index: 100;
+        }
 
-        .status-brand {
-            display: flex; align-items: center; gap: 10px; font-weight: 800; 
-            color: var(--primary); font-size: 1.2rem; letter-spacing: -0.5px;
-        }
+        .status-brand {
+            display: flex; align-items: center; gap: 10px; font-weight: 800; 
+            color: var(--primary); font-size: 1.2rem; letter-spacing: -0.5px;
+        }
 
-        .timer-pill {
-            background: var(--primary-light); border: 1px solid rgba(37, 99, 235, 0.2);
-            padding: 8px 20px; border-radius: 20px; font-weight: 700; font-family: monospace;
-            font-size: 1.3rem; color: var(--primary); display: flex; align-items: center; gap: 8px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-            transition: all 0.3s ease;
-        }
+        .timer-pill {
+            background: var(--primary-light); border: 1px solid rgba(37, 99, 235, 0.2);
+            padding: 8px 20px; border-radius: 20px; font-weight: 700; font-family: monospace;
+            font-size: 1.3rem; color: var(--primary); display: flex; align-items: center; gap: 8px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            transition: all 0.3s ease;
+        }
 
-        .timer-pill.urgent { 
-            color: var(--danger); background: var(--danger-light); border-color: var(--danger); 
-            animation: pulse-red 1s infinite; 
-        }
+        .timer-pill.urgent { 
+            color: var(--danger); background: var(--danger-light); border-color: var(--danger); 
+            animation: pulse-red 1s infinite; 
+        }
 
-        /* Main Interaction Stage */
-        .main-stage {
-            margin-top: 120px; width: 90%; max-width: 850px;
-            background: var(--bg-card); border: 1px solid var(--border-color);
-            border-radius: 24px; padding: 40px; text-align: center; position: relative;
-            box-shadow: var(--shadow-lg); z-index: 10;
-        }
+        /* Main Interaction Stage */
+        .main-stage {
+            margin-top: 120px; width: 90%; max-width: 850px;
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 24px; padding: 40px; text-align: center; position: relative;
+            box-shadow: var(--shadow-lg); z-index: 10;
+        }
 
-        .orb-container { height: 160px; display: flex; justify-content: center; align-items: center; margin-bottom: 25px; }
-        
-        .orb {
-            width: 110px; height: 110px; border-radius: 50%; background: var(--primary);
-            box-shadow: 0 0 30px rgba(37, 99, 235, 0.4), 0 0 60px rgba(37, 99, 235, 0.2);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .orb.listening { background: var(--success); box-shadow: 0 0 30px rgba(5, 150, 105, 0.4); transform: scale(1.1); animation: wave 1.5s infinite; }
-        .orb.speaking { background: var(--warning); box-shadow: 0 0 30px rgba(217, 119, 6, 0.4); animation: pulse-speak 0.8s infinite; }
+        .orb-container { height: 160px; display: flex; justify-content: center; align-items: center; margin-bottom: 25px; }
+        
+        .orb {
+            width: 110px; height: 110px; border-radius: 50%; background: var(--primary);
+            box-shadow: 0 0 30px rgba(37, 99, 235, 0.4), 0 0 60px rgba(37, 99, 235, 0.2);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .orb.listening { background: var(--success); box-shadow: 0 0 30px rgba(5, 150, 105, 0.4); transform: scale(1.1); animation: wave 1.5s infinite; }
+        .orb.speaking { background: var(--warning); box-shadow: 0 0 30px rgba(217, 119, 6, 0.4); animation: pulse-speak 0.8s infinite; }
 
-        .hardware-banner {
-            display: inline-flex; align-items: center; gap: 10px;
-            padding: 10px 20px; border-radius: 30px; font-weight: 700; font-size: 0.9rem;
-            margin-bottom: 20px;
-        }
-        .hw-active { background: var(--danger-light); color: var(--danger); }
-        .hw-dead { background: var(--success-light); color: var(--success); }
+        .hardware-banner {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 10px 20px; border-radius: 30px; font-weight: 700; font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        .hw-active { background: var(--danger-light); color: var(--danger); }
+        .hw-dead { background: var(--success-light); color: var(--success); }
 
-        #statusText { color: var(--text-dark); font-weight: 700; font-size: 1.2rem; margin-bottom: 10px; }
-        #timerWarning { font-weight: 700; color: var(--danger); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; height: 20px; }
+        #statusText { color: var(--text-dark); font-weight: 700; font-size: 1.2rem; margin-bottom: 10px; }
+        #timerWarning { font-weight: 700; color: var(--danger); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; height: 20px; }
 
-        .mic-btn {
-            background: var(--primary); border: none; padding: 16px 45px; border-radius: 12px;
-            color: white; font-weight: 700; font-size: 1.1rem; cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 25px; 
-            display: flex; align-items: center; gap: 12px; margin-inline: auto;
-            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
-        }
-        .mic-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(37, 99, 235, 0.3); background: var(--primary-hover); }
-        .mic-btn:disabled { background: var(--text-muted); cursor: not-allowed; box-shadow: none; }
+        .mic-btn {
+            background: var(--primary); border: none; padding: 16px 45px; border-radius: 12px;
+            color: white; font-weight: 700; font-size: 1.1rem; cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 25px; 
+            display: flex; align-items: center; gap: 12px; margin-inline: auto;
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+        }
+        .mic-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(37, 99, 235, 0.3); background: var(--primary-hover); }
+        .mic-btn:disabled { background: var(--text-muted); cursor: not-allowed; box-shadow: none; }
 
-        #transcript {
-            margin-top: 35px; text-align: left; background: var(--bg-main);
-            border-radius: 16px; padding: 25px; height: 220px; overflow-y: auto;
-            border: 1px solid var(--border-color); scroll-behavior: smooth;
-        }
+        #transcript {
+            margin-top: 35px; text-align: left; background: var(--bg-main);
+            border-radius: 16px; padding: 25px; height: 220px; overflow-y: auto;
+            border: 1px solid var(--border-color); scroll-behavior: smooth;
+        }
 
-        .msg { margin-bottom: 18px; line-height: 1.6; font-size: 1rem; padding: 14px 20px; border-radius: 14px; max-width: 85%; position: relative; }
-        .msg-ai { background: var(--primary-light); color: var(--text-dark); border-left: 4px solid var(--primary); box-shadow: var(--shadow-sm); }
-        .msg-user { background: var(--success-light); color: var(--text-dark); margin-left: auto; border-right: 4px solid var(--success); box-shadow: var(--shadow-sm); }
+        .msg { margin-bottom: 18px; line-height: 1.6; font-size: 1rem; padding: 14px 20px; border-radius: 14px; max-width: 85%; position: relative; }
+        .msg-ai { background: var(--primary-light); color: var(--text-dark); border-left: 4px solid var(--primary); box-shadow: var(--shadow-sm); }
+        .msg-user { background: var(--success-light); color: var(--text-dark); margin-left: auto; border-right: 4px solid var(--success); box-shadow: var(--shadow-sm); }
 
-        #cameraPreview {
-            position: fixed; bottom: 30px; right: 30px; width: 240px; height: 180px;
-            border-radius: 16px; border: 3px solid var(--primary); transform: scaleX(-1);
-            background: #000; object-fit: cover; box-shadow: var(--shadow-lg); z-index: 100;
-            transition: opacity 0.5s ease;
-        }
+        #cameraPreview {
+            position: fixed; bottom: 30px; right: 30px; width: 240px; height: 180px;
+            border-radius: 16px; border: 3px solid var(--primary); transform: scaleX(-1);
+            background: #000; object-fit: cover; box-shadow: var(--shadow-lg); z-index: 100;
+            transition: opacity 0.5s ease;
+        }
 
-        .overlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 9999; flex-direction: column; justify-content: center; align-items: center; text-align: center;
-            padding: 40px;
-        }
-        #warningScreen { background: rgba(220, 38, 38, 0.95); color: white; backdrop-filter: blur(8px); }
-        #rejectScreen { background: var(--bg-card); color: var(--text-dark); }
+        .overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 9999; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+            padding: 40px;
+        }
+        #warningScreen { background: rgba(220, 38, 38, 0.95); color: white; backdrop-filter: blur(8px); }
+        #rejectScreen { background: var(--bg-card); color: var(--text-dark); }
 
-        .privacy-banner {
-            background: var(--success-light); border: 1px solid var(--success);
-            color: var(--success); padding: 15px 20px; border-radius: 12px;
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            font-weight: 600; margin-bottom: 25px; width: 100%;
-        }
+        .privacy-banner {
+            background: var(--success-light); border: 1px solid var(--success);
+            color: var(--success); padding: 15px 20px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            font-weight: 600; margin-bottom: 25px; width: 100%;
+        }
 
-        @keyframes wave { 0% { border-radius: 50%; } 50% { border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; } 100% { border-radius: 50%; } }
-        @keyframes pulse-speak { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
-        @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes wave { 0% { border-radius: 50%; } 50% { border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; } 100% { border-radius: 50%; } }
+        @keyframes pulse-speak { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+        @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        #resultsScreen { display: none; padding: 50px; animation: fadeIn 0.8s ease; }
-        .score-box { font-size: 5rem; font-weight: 900; color: var(--primary); margin: 20px 0; letter-spacing: -2px; }
-        
-        #preStartModal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(244, 247, 251, 0.9); backdrop-filter: blur(15px);
-            z-index: 1000; display: flex; justify-content: center; align-items: center;
-        }
-    </style>
+        #resultsScreen { display: none; padding: 50px; animation: fadeIn 0.8s ease; }
+        .score-box { font-size: 5rem; font-weight: 900; color: var(--primary); margin: 20px 0; letter-spacing: -2px; }
+        
+        #preStartModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(244, 247, 251, 0.9); backdrop-filter: blur(15px);
+            z-index: 1000; display: flex; justify-content: center; align-items: center;
+        }
+    </style>
 </head>
 <body>
 
-    <video autoplay loop muted playsinline id="bgVideo">
-        <source src="https://assets.mixkit.co/videos/preview/mixkit-abstract-technology-plexus-background-27680-large.mp4" type="video/mp4">
-    </video>
+    <video autoplay loop muted playsinline id="bgVideo">
+        <source src="https://assets.mixkit.co/videos/preview/mixkit-abstract-technology-plexus-background-27680-large.mp4" type="video/mp4">
+    </video>
 
-    <div id="preStartModal">
-        <div class="main-stage" style="max-width: 550px; margin-top: 0;">
-            <i data-lucide="shield-check" style="width: 60px; height: 60px; color: var(--primary); margin-bottom: 25px;"></i>
-            <h2 style="margin-top: 0; font-size: 2rem;">Security Check</h2>
-            <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 35px;">
-                Access to <b>Camera, Microphone, and Screen</b> is required. Exiting fullscreen or opening other desktop apps will result in immediate termination.
-            </p>
-            <button id="realStartBtn" class="mic-btn" style="width: 100%; justify-content: center; font-size: 1.2rem;">
-                Validate & Start Session
-            </button>
-        </div>
-    </div>
+    <div id="preStartModal">
+        <div class="main-stage" style="max-width: 550px; margin-top: 0;">
+            <i data-lucide="shield-check" style="width: 60px; height: 60px; color: var(--primary); margin-bottom: 25px;"></i>
+            <h2 style="margin-top: 0; font-size: 2rem;">Security Check</h2>
+            <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 35px;">
+                Access to <b>Camera, Microphone, and Screen</b> is required. Exiting fullscreen or opening other desktop apps will result in immediate termination.
+            </p>
+            <button id="realStartBtn" class="mic-btn" style="width: 100%; justify-content: center; font-size: 1.2rem;">
+                Validate & Start Session
+            </button>
+        </div>
+    </div>
 
-    <div class="status-bar">
-        <div class="status-brand">
-            <i data-lucide="cpu" style="width: 24px; height: 24px;"></i>
-            <span>SYSTEM ACTIVE</span>
-        </div>
-        <div id="sessionTimer" class="timer-pill">
-            <i data-lucide="clock" style="width: 20px; height: 20px;"></i> <span>00:00</span>
-        </div>
-    </div>
+    <div class="status-bar">
+        <div class="status-brand">
+            <i data-lucide="cpu" style="width: 24px; height: 24px;"></i>
+            <span>SYSTEM ACTIVE</span>
+        </div>
+        <div id="sessionTimer" class="timer-pill">
+            <i data-lucide="clock" style="width: 20px; height: 20px;"></i> <span>00:00</span>
+        </div>
+    </div>
 
-    <div id="interviewStage" class="main-stage">
-        <div id="hwStatus" class="hardware-banner hw-active">
-            <i data-lucide="video"></i> Hardware Active
-        </div>
-        <div class="orb-container">
-            <div id="aiOrb" class="orb"></div>
-        </div>
-        
-        <p id="statusText">Initializing Neural Engine...</p>
-        <p id="timerWarning"></p>
+    <div id="interviewStage" class="main-stage">
+        <div id="hwStatus" class="hardware-banner hw-active">
+            <i data-lucide="video"></i> Hardware Active
+        </div>
+        <div class="orb-container">
+            <div id="aiOrb" class="orb"></div>
+        </div>
+        
+        <p id="statusText">Initializing Neural Engine...</p>
+        <p id="timerWarning"></p>
 
-        <button id="micBtn" class="mic-btn" disabled>
-            <i data-lucide="mic"></i> <span>Awaiting Logic...</span>
-        </button>
+        <button id="micBtn" class="mic-btn" disabled>
+            <i data-lucide="mic"></i> <span>Awaiting Logic...</span>
+        </button>
 
-        <div id="transcript"></div>
-    </div>
+        <div id="transcript"></div>
+    </div>
 
-    <div id="resultsScreen" class="main-stage">
-        <div class="privacy-banner">
-            <i data-lucide="shield-off"></i>
-            Hardware Forcefully Disconnected. Privacy Secured.
-        </div>
+    <div id="resultsScreen" class="main-stage">
+        <div class="privacy-banner">
+            <i data-lucide="shield-off"></i>
+            Hardware Forcefully Disconnected. Privacy Secured.
+        </div>
 
-        <i data-lucide="award" style="width: 75px; height: 75px; color: var(--primary);"></i>
-        <h2 style="font-size: 2.2rem; margin: 15px 0 0 0;">Evaluation Report</h2>
-        <div class="score-box" id="finalScore">--</div>
-        
-        <div style="text-align: left; margin-top: 40px; background: var(--bg-main); padding: 30px; border-radius: 16px;">
-            <h3 style="margin-top:0; color: var(--text-dark); display: flex; align-items: center; gap: 10px;">
-                <i data-lucide="bar-chart-2" style="color: var(--primary);"></i> Neural Feedback
-            </h3>
-            <div id="recText" style="line-height: 1.8; color: var(--text-dark);"></div>
-        </div>
+        <i data-lucide="award" style="width: 75px; height: 75px; color: var(--primary);"></i>
+        <h2 style="font-size: 2.2rem; margin: 15px 0 0 0;">Evaluation Report</h2>
+        <div class="score-box" id="finalScore">--</div>
+        
+        <div style="text-align: left; margin-top: 40px; background: var(--bg-main); padding: 30px; border-radius: 16px;">
+            <h3 style="margin-top:0; color: var(--text-dark); display: flex; align-items: center; gap: 10px;">
+                <i data-lucide="bar-chart-2" style="color: var(--primary);"></i> Neural Feedback
+            </h3>
+            <div id="recText" style="line-height: 1.8; color: var(--text-dark);"></div>
+        </div>
 
-        <button class="mic-btn" onclick="window.location.href='/'" style="margin-top:40px; background: var(--text-dark);">
-            Return to Portal
-        </button>
-    </div>
+        <button class="mic-btn" onclick="window.location.href='/'" style="margin-top:40px; background: var(--text-dark);">
+            Return to Portal
+        </button>
+    </div>
 
-    <video id="cameraPreview" autoplay muted playsinline></video>
+    <video id="cameraPreview" autoplay muted playsinline></video>
 
-    <div id="warningScreen" class="overlay">
-        <i data-lucide="alert-octagon" style="width: 110px; height: 110px; margin-bottom: 25px;"></i>
-        <h1 id="warningHeader" style="font-size: 4rem; margin: 0;">WARNING 1/3</h1>
-        <p id="warningDetail" style="font-size: 1.8rem; max-width: 700px; font-weight: 600; margin: 20px 0;"></p>
-        <p style="opacity: 0.8; font-size: 1.3rem;">Correct behavior to resume automatically.</p>
-    </div>
+    <div id="warningScreen" class="overlay">
+        <i data-lucide="alert-octagon" style="width: 110px; height: 110px; margin-bottom: 25px;"></i>
+        <h1 id="warningHeader" style="font-size: 4rem; margin: 0;">WARNING 1/3</h1>
+        <p id="warningDetail" style="font-size: 1.8rem; max-width: 700px; font-weight: 600; margin: 20px 0;"></p>
+        <p style="opacity: 0.8; font-size: 1.3rem;">Correct behavior to resume automatically.</p>
+    </div>
 
-    <div id="rejectScreen" class="overlay">
-        <div class="privacy-banner" style="margin-bottom: 40px; background: var(--danger-light); color: var(--danger); border-color: var(--danger);">
-            <i data-lucide="shield-alert"></i>
-            HARDWARE REVOKED: All streams killed for privacy.
-        </div>
-        <i data-lucide="x-circle" style="width: 120px; height: 120px; color: var(--danger); margin-bottom: 25px;"></i>
-        <h1 style="color: var(--danger); font-size: 3.8rem; margin: 0; letter-spacing: -2px;">SESSION TERMINATED</h1>
-        <p id="rejectReason" style="font-size: 1.4rem; max-width: 650px; color: var(--text-muted); margin: 25px 0; line-height: 1.5;"></p>
-        <button class="mic-btn" onclick="window.location.href='/'" style="margin-top: 30px; background: var(--text-dark); padding: 20px 50px;">Return Home</button>
-    </div>
+    <div id="rejectScreen" class="overlay">
+        <div class="privacy-banner" style="margin-bottom: 40px; background: var(--danger-light); color: var(--danger); border-color: var(--danger);">
+            <i data-lucide="shield-alert"></i>
+            HARDWARE REVOKED: All streams killed for privacy.
+        </div>
+        <i data-lucide="x-circle" style="width: 120px; height: 120px; color: var(--danger); margin-bottom: 25px;"></i>
+        <h1 style="color: var(--danger); font-size: 3.8rem; margin: 0; letter-spacing: -2px;">SESSION TERMINATED</h1>
+        <p id="rejectReason" style="font-size: 1.4rem; max-width: 650px; color: var(--text-muted); margin: 25px 0; line-height: 1.5;"></p>
+        <button class="mic-btn" onclick="window.location.href='/'" style="margin-top: 30px; background: var(--text-dark); padding: 20px 50px;">Return Home</button>
+    </div>
 
-    <script>
-        // Global Constants & State
-        lucide.createIcons();
-        const sessionId = window.location.pathname.split('/').pop();
-        let isProctoringActive = false;
-        let warnings = 0;
-        let isWarningCooldown = false;
-        
-        let cameraStream, screenStream, recognition, femaleVoice, mpCamera;
-        let lastFullQuestionText = ""; // Persistent question buffer
-        
-        let globalSecondsRemaining = 0;
-        let answerCountdown = 10;
-        let globalTimerInterval, answerTimerInterval, silenceTimer, lastFaceCheck = 0;
+    <script>
+        // Global Constants & State
+        lucide.createIcons();
+        const sessionId = window.location.pathname.split('/').pop();
+        let isProctoringActive = false;
+        let warnings = 0;
+        let isWarningCooldown = false;
+        
+        let cameraStream, screenStream, recognition, femaleVoice, mpCamera;
+        let lastFullQuestionText = ""; // Persistent question buffer
+        
+        let globalSecondsRemaining = 0;
+        let answerCountdown = 10;
+        let globalTimerInterval, answerTimerInterval, silenceTimer, lastFaceCheck = 0;
 
-        const orb = document.getElementById('aiOrb');
-        const status = document.getElementById('statusText');
-        const timerWarn = document.getElementById('timerWarning');
-        const sessionTimerDisplay = document.getElementById('sessionTimer').querySelector('span');
-        const micBtn = document.getElementById('micBtn');
-        const transcriptDiv = document.getElementById('transcript');
+        const orb = document.getElementById('aiOrb');
+        const status = document.getElementById('statusText');
+        const timerWarn = document.getElementById('timerWarning');
+        const sessionTimerDisplay = document.getElementById('sessionTimer').querySelector('span');
+        const micBtn = document.getElementById('micBtn');
+        const transcriptDiv = document.getElementById('transcript');
 
-        // ==========================================
-        // 1. HARDWARE KILL ENGINE
-        // ==========================================
+        // ==========================================
+        // 1. HARDWARE KILL ENGINE
+        // ==========================================
 
-        function stopAllMedia() {
-            console.log("PRIVACY KILL: Hard-stopping all devices.");
-            
-            if (mpCamera) {
-                mpCamera.stop();
-            }
+        function stopAllMedia() {
+            console.log("PRIVACY KILL: Hard-stopping all devices.");
+            
+            if (mpCamera) {
+                mpCamera.stop();
+            }
 
-            if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
-                cameraStream = null;
-            }
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
 
-            if (screenStream) {
-                screenStream.getTracks().forEach(track => track.stop());
-                screenStream = null;
-            }
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
+            }
 
-            const video = document.getElementById('cameraPreview');
-            video.srcObject = null;
-            video.style.opacity = '0';
-            setTimeout(() => video.style.display = 'none', 500);
+            const video = document.getElementById('cameraPreview');
+            video.srcObject = null;
+            video.style.opacity = '0';
+            setTimeout(() => video.style.display = 'none', 500);
 
-            const banner = document.getElementById('hwStatus');
-            if(banner) {
-                banner.className = "hardware-banner hw-dead";
-                banner.innerHTML = '<i data-lucide="shield-off"></i> Hardware Physically Released';
-                lucide.createIcons();
-            }
-        }
+            const banner = document.getElementById('hwStatus');
+            if(banner) {
+                banner.className = "hardware-banner hw-dead";
+                banner.innerHTML = '<i data-lucide="shield-off"></i> Hardware Physically Released';
+                lucide.createIcons();
+            }
+        }
 
-        async function initializeHardware() {
-            try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720 }, audio: true 
-                });
-                document.getElementById('cameraPreview').srcObject = cameraStream;
+        async function initializeHardware() {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720 }, audio: true 
+                });
+                document.getElementById('cameraPreview').srcObject = cameraStream;
 
-                if(!isMobileCheck()) {
-                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                    screenStream.getVideoTracks()[0].onended = () => {
-                        terminateSession("Violation: Screen sharing was manually stopped.");
-                    };
-                }
+                if(!isMobileCheck()) {
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    screenStream.getVideoTracks()[0].onended = () => {
+                        terminateSession("Violation: Screen sharing was manually stopped.");
+                    };
+                }
 
-                if (!document.fullscreenElement && !isMobileCheck()) {
-                    await document.documentElement.requestFullscreen();
-                }
+                if (!document.fullscreenElement && !isMobileCheck()) {
+                    await document.documentElement.requestFullscreen();
+                }
 
-                return true;
-            } catch(e) {
-                console.error(e);
-                alert("Authorization Denied: Camera, Microphone, and Screen Sharing are required.");
-                return false;
-            }
-        }
+                return true;
+            } catch(e) {
+                console.error(e);
+                alert("Authorization Denied: Camera, Microphone, and Screen Sharing are required.");
+                return false;
+            }
+        }
 
-        function isMobileCheck() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        }
+        function isMobileCheck() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
 
-        // ==========================================
-        // 2. SPEECH & PERSISTENCE ENGINE
-        // ==========================================
+        // ==========================================
+        // 2. SPEECH & PERSISTENCE ENGINE
+        // ==========================================
 
-        function initNeuralVoice() {
-            const voices = speechSynthesis.getVoices();
-            femaleVoice = voices.find(v => 
-                v.name.includes('Google UK English Female') || 
-                v.name.includes('Samantha') || 
-                v.name.includes('Female')
-            );
-            if(!femaleVoice) femaleVoice = voices[0];
-        }
-        initNeuralVoice();
-        speechSynthesis.onvoiceschanged = initNeuralVoice;
+        function initNeuralVoice() {
+            const voices = speechSynthesis.getVoices();
+            femaleVoice = voices.find(v => 
+                v.name.includes('Google UK English Female') || 
+                v.name.includes('Samantha') || 
+                v.name.includes('Female')
+            );
+            if(!femaleVoice) femaleVoice = voices[0];
+        }
+        initNeuralVoice();
+        speechSynthesis.onvoiceschanged = initNeuralVoice;
 
-        function speak(text, onEnd) {
-            speechSynthesis.cancel();
-            
-            if (!isProctoringActive && !text.includes("Evaluation") && !text.includes("Warning")) return;
+        function speak(text, onEnd) {
+            speechSynthesis.cancel();
+            
+            if (!isProctoringActive && !text.includes("Evaluation") && !text.includes("Warning")) return;
 
-            // Only update the question buffer if it's an actual interview question
-            if (!text.includes("Warning") && !text.includes("Resuming")) {
-                lastFullQuestionText = text;
-            }
+            // Only update the question buffer if it's an actual interview question
+            if (!text.includes("Warning") && !text.includes("Resuming")) {
+                lastFullQuestionText = text;
+            }
 
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.voice = femaleVoice;
-            utterance.rate = 1.03;
-            
-            utterance.onstart = () => {
-                orb.className = "orb speaking";
-                status.innerText = "Recruiter is speaking...";
-                micBtn.disabled = true;
-            };
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.voice = femaleVoice;
+            utterance.rate = 1.03;
+            
+            utterance.onstart = () => {
+                orb.className = "orb speaking";
+                status.innerText = "Recruiter is speaking...";
+                micBtn.disabled = true;
+            };
 
-            utterance.onend = () => {
-                orb.className = "orb";
-                status.innerText = "Awaiting your response...";
-                micBtn.disabled = false;
-                if(onEnd && isProctoringActive) onEnd();
-            };
-            
-            speechSynthesis.speak(utterance);
-        }
+            utterance.onend = () => {
+                orb.className = "orb";
+                status.innerText = "Awaiting your response...";
+                micBtn.disabled = false;
+                if(onEnd && isProctoringActive) onEnd();
+            };
+            
+            speechSynthesis.speak(utterance);
+        }
 
-        if ('webkitSpeechRecognition' in window) {
-            recognition = new webkitSpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
 
-            recognition.onstart = () => {
-                orb.className = "orb listening";
-                micBtn.querySelector('span').innerText = "AI Listening...";
-            };
+            recognition.onstart = () => {
+                orb.className = "orb listening";
+                micBtn.querySelector('span').innerText = "AI Listening...";
+            };
 
-            recognition.onresult = (event) => {
-                let currentTranscript = "";
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    currentTranscript += event.results[i][0].transcript;
-                }
-                
-                if(currentTranscript.length > 5) {
-                    clearInterval(answerTimerInterval);
-                    timerWarn.style.color = "var(--success)";
-                    timerWarn.innerText = "Audio captured...";
-                }
+            recognition.onresult = (event) => {
+                let currentTranscript = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    currentTranscript += event.results[i][0].transcript;
+                }
+                
+                if(currentTranscript.length > 5) {
+                    clearInterval(answerTimerInterval);
+                    timerWarn.style.color = "var(--success)";
+                    timerWarn.innerText = "Audio captured...";
+                }
 
-                clearTimeout(silenceTimer);
-                silenceTimer = setTimeout(() => {
-                    if(currentTranscript.trim().length > 0) {
-                        recognition.stop();
-                        submitToBackend(currentTranscript.trim());
-                    }
-                }, 4000); 
-            };
+                clearTimeout(silenceTimer);
+                silenceTimer = setTimeout(() => {
+                    if(currentTranscript.trim().length > 0) {
+                        recognition.stop();
+                        submitToBackend(currentTranscript.trim());
+                    }
+                }, 4000); 
+            };
 
-            recognition.onend = () => { orb.className = "orb"; };
-        }
+            recognition.onend = () => { orb.className = "orb"; };
+        }
 
-        // ==========================================
-        // 3. PROCTORING & APP PROTECTION
-        // ==========================================
+        // ==========================================
+        // 3. PROCTORING & APP PROTECTION
+        // ==========================================
 
-        function setupFaceWatch() {
-            const faceDetection = new FaceDetection({ 
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` 
-            });
-            faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.6 });
-            faceDetection.onResults(results => {
-                const now = Date.now();
-                if(!isProctoringActive || isWarningCooldown || now - lastFaceCheck < 300) return;
-                lastFaceCheck = now;
+        function setupFaceWatch() {
+            const faceDetection = new FaceDetection({ 
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` 
+            });
+            faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.6 });
+            faceDetection.onResults(results => {
+                const now = Date.now();
+                if(!isProctoringActive || isWarningCooldown || now - lastFaceCheck < 300) return;
+                lastFaceCheck = now;
 
-                if(!results.detections || results.detections.length === 0) {
-                    issueStrike("Face not detected in frame.");
-                } else if(results.detections.length > 1) {
-                    issueStrike("Multiple individuals detected.");
-                } else {
-                    const landmarks = results.detections[0].landmarks;
-                    const eyeCenter = (landmarks[0].x + landmarks[1].x) / 2;
-                    const eyeDistance = Math.abs(landmarks[0].x - landmarks[1].x);
-                    const noseOffset = Math.abs(landmarks[2].x - eyeCenter);
-                    if (noseOffset > eyeDistance * 0.45) issueStrike("Head turn detected.");
-                }
-            });
+                if(!results.detections || results.detections.length === 0) {
+                    issueStrike("Face not detected in frame.");
+                } else if(results.detections.length > 1) {
+                    issueStrike("Multiple individuals detected.");
+                } else {
+                    const landmarks = results.detections[0].landmarks;
+                    const eyeCenter = (landmarks[0].x + landmarks[1].x) / 2;
+                    const eyeDistance = Math.abs(landmarks[0].x - landmarks[1].x);
+                    const noseOffset = Math.abs(landmarks[2].x - eyeCenter);
+                    if (noseOffset > eyeDistance * 0.45) issueStrike("Head turn detected.");
+                }
+            });
 
-            mpCamera = new Camera(document.getElementById('cameraPreview'), {
-                onFrame: async () => { await faceDetection.send({image: document.getElementById('cameraPreview')}); },
-                width: 640, height: 480
-            });
-            mpCamera.start();
-        }
+            mpCamera = new Camera(document.getElementById('cameraPreview'), {
+                onFrame: async () => { await faceDetection.send({image: document.getElementById('cameraPreview')}); },
+                width: 640, height: 480
+            });
+            mpCamera.start();
+        }
 
-        function issueStrike(reason) {
-            warnings++;
-            if (warnings > 3) {
-                terminateSession("Strikes limit (3/3) exceeded.");
-                return;
-            }
-            
-            isProctoringActive = false;
-            speechSynthesis.cancel();
-            if(recognition) recognition.stop();
-            clearInterval(answerTimerInterval);
-            
-            // Speak the warning out loud
-            const msg = new SpeechSynthesisUtterance("Warning " + warnings + ". " + reason);
-            msg.voice = femaleVoice;
-            speechSynthesis.speak(msg);
+        function issueStrike(reason) {
+            warnings++;
+            if (warnings > 3) {
+                terminateSession("Strikes limit (3/3) exceeded.");
+                return;
+            }
+            
+            isProctoringActive = false;
+            speechSynthesis.cancel();
+            if(recognition) recognition.stop();
+            clearInterval(answerTimerInterval);
+            
+            // Speak the warning out loud
+            const msg = new SpeechSynthesisUtterance("Warning " + warnings + ". " + reason);
+            msg.voice = femaleVoice;
+            speechSynthesis.speak(msg);
 
-            document.getElementById('warningHeader').innerText = `STRIKE ${warnings}/3`;
-            document.getElementById('warningDetail').innerText = reason;
-            document.getElementById('warningScreen').style.display = "flex";
+            document.getElementById('warningHeader').innerText = `STRIKE ${warnings}/3`;
+            document.getElementById('warningDetail').innerText = reason;
+            document.getElementById('warningScreen').style.display = "flex";
 
-            setTimeout(() => {
-                document.getElementById('warningScreen').style.display = "none";
-                isProctoringActive = true;
-                // Natural resuming speech
-                speak("Resuming session. " + lastFullQuestionText, startAnswerTimer);
-            }, 5500);
-        }
+            setTimeout(() => {
+                document.getElementById('warningScreen').style.display = "none";
+                isProctoringActive = true;
+                // Natural resuming speech
+                speak("Resuming session. " + lastFullQuestionText, startAnswerTimer);
+            }, 5500);
+        }
 
-        // ==========================================
-        // 4. SESSION FLOW
-        // ==========================================
+        // ==========================================
+        // 4. SESSION FLOW
+        // ==========================================
 
-        async function submitToBackend(text) {
-            if (text && text !== "" && !text.includes("[")) appendTranscript('user', text);
-            status.innerText = "Analyzing Neural Link...";
-            timerWarn.innerText = "Thinking...";
-            micBtn.disabled = true;
-            
-            try {
-                const res = await fetch('/next_question', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ session_id: sessionId, user_answer: text })
-                });
-                const data = await res.json();
-                
-                if (data.action === "finish") {
-                    endInterview(data);
-                } else {
-                    appendTranscript('ai', data.text);
-                    speak(data.text, startAnswerTimer);
-                }
-            } catch(e) { 
-                status.innerText = "Neural Drop. Retrying...";
-                setTimeout(() => submitToBackend(text), 2000);
-            }
-        }
+        async function submitToBackend(text) {
+            if (text && text !== "" && !text.includes("[")) appendTranscript('user', text);
+            status.innerText = "Analyzing Neural Link...";
+            timerWarn.innerText = "Thinking...";
+            micBtn.disabled = true;
+            
+            try {
+                const res = await fetch('/next_question', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ session_id: sessionId, user_answer: text })
+                });
+                const data = await res.json();
+                
+                if (data.action === "finish") {
+                    endInterview(data);
+                } else {
+                    appendTranscript('ai', data.text);
+                    speak(data.text, startAnswerTimer);
+                }
+            } catch(e) { 
+                status.innerText = "Neural Drop. Retrying...";
+                setTimeout(() => submitToBackend(text), 2000);
+            }
+        }
 
-        function startAnswerTimer() {
-            if(!isProctoringActive || isWarningCooldown) return;
-            answerCountdown = 10;
-            timerWarn.style.color = "var(--danger)";
-            timerWarn.innerText = `${answerCountdown}s to start answering...`;
-            
-            clearInterval(answerTimerInterval);
-            if(recognition) recognition.start();
+        function startAnswerTimer() {
+            if(!isProctoringActive || isWarningCooldown) return;
+            answerCountdown = 10;
+            timerWarn.style.color = "var(--danger)";
+            timerWarn.innerText = `${answerCountdown}s to start answering...`;
+            
+            clearInterval(answerTimerInterval);
+            if(recognition) recognition.start();
 
-            answerTimerInterval = setInterval(() => {
-                answerCountdown--;
-                timerWarn.innerText = `${answerCountdown}s to start answering...`;
-                if(answerCountdown <= 0) {
-                    clearInterval(answerTimerInterval);
-                    speak("Time limit reached. Switching technical topics.", () => submitToBackend("[NO_ANSWER_TIMEOUT]"));
-                }
-            }, 1000);
-        }
+            answerTimerInterval = setInterval(() => {
+                answerCountdown--;
+                timerWarn.innerText = `${answerCountdown}s to start answering...`;
+                if(answerCountdown <= 0) {
+                    clearInterval(answerTimerInterval);
+                    speak("Time limit reached. Switching technical topics.", () => submitToBackend("[NO_ANSWER_TIMEOUT]"));
+                }
+            }, 1000);
+        }
 
-        function runGlobalClock() {
-            globalTimerInterval = setInterval(() => {
-                if (globalSecondsRemaining <= 0 || !isProctoringActive) return;
-                globalSecondsRemaining--;
-                const m = Math.floor(globalSecondsRemaining / 60).toString().padStart(2, '0');
-                const s = (globalSecondsRemaining % 60).toString().padStart(2, '0');
-                sessionTimerDisplay.innerText = `${m}:${s}`;
+        function runGlobalClock() {
+            globalTimerInterval = setInterval(() => {
+                if (globalSecondsRemaining <= 0 || !isProctoringActive) return;
+                globalSecondsRemaining--;
+                const m = Math.floor(globalSecondsRemaining / 60).toString().padStart(2, '0');
+                const s = (globalSecondsRemaining % 60).toString().padStart(2, '0');
+                sessionTimerDisplay.innerText = `${m}:${s}`;
 
-                if(globalSecondsRemaining < 60) document.getElementById('sessionTimer').classList.add('urgent');
-                if(globalSecondsRemaining === 0) {
-                    isProctoringActive = false;
-                    speak("Session time is up. Finalizing evaluation.", () => submitToBackend("[SYSTEM_DURATION_EXPIRED]"));
-                }
-            }, 1000);
-        }
+                if(globalSecondsRemaining < 60) document.getElementById('sessionTimer').classList.add('urgent');
+                if(globalSecondsRemaining === 0) {
+                    isProctoringActive = false;
+                    speak("Session time is up. Finalizing evaluation.", () => submitToBackend("[SYSTEM_DURATION_EXPIRED]"));
+                }
+            }, 1000);
+        }
 
-        function terminateSession(reason) {
-            isProctoringActive = false;
-            speechSynthesis.cancel();
-            stopAllMedia();
-            if(document.fullscreenElement) document.exitFullscreen().catch(e => {});
+        function terminateSession(reason) {
+            isProctoringActive = false;
+            speechSynthesis.cancel();
+            stopAllMedia();
+            if(document.fullscreenElement) document.exitFullscreen().catch(e => {});
 
-            document.getElementById('rejectReason').innerText = reason;
-            document.getElementById('interviewStage').style.display = "none";
-            document.getElementById('rejectScreen').style.display = "flex";
-        }
+            document.getElementById('rejectReason').innerText = reason;
+            document.getElementById('interviewStage').style.display = "none";
+            document.getElementById('rejectScreen').style.display = "flex";
+        }
 
-        function endInterview(data) {
-            isProctoringActive = false;
-            speechSynthesis.cancel();
-            stopAllMedia();
-            if(document.fullscreenElement) document.exitFullscreen().catch(e => {});
+        function endInterview(data) {
+            isProctoringActive = false;
+            speechSynthesis.cancel();
+            stopAllMedia();
+            if(document.fullscreenElement) document.exitFullscreen().catch(e => {});
 
-            document.getElementById('interviewStage').style.display = "none";
-            document.getElementById('resultsScreen').style.display = "block";
-            
-            document.getElementById('finalScore').innerText = `${data.marks}/100`;
-            document.getElementById('recText').innerHTML = data.recommendations;
-            
-            speak("Interview complete. All hardware released for privacy.", null);
-        }
+            document.getElementById('interviewStage').style.display = "none";
+            document.getElementById('resultsScreen').style.display = "block";
+            
+            document.getElementById('finalScore').innerText = `${data.marks}/100`;
+            document.getElementById('recText').innerHTML = data.recommendations;
+            
+            speak("Interview complete. All hardware released for privacy.", null);
+        }
 
-        function appendTranscript(role, text) {
-            const div = document.createElement('div');
-            div.className = `msg msg-${role}`;
-            div.innerHTML = `<strong>${role.toUpperCase()}:</strong> ${text}`;
-            transcriptDiv.appendChild(div);
-            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
-        }
+        function appendTranscript(role, text) {
+            const div = document.createElement('div');
+            div.className = `msg msg-${role}`;
+            div.innerHTML = `<strong>${role.toUpperCase()}:</strong> ${text}`;
+            transcriptDiv.appendChild(div);
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+        }
 
-        // ==========================================
-        // 5. INITIALIZATION & FOCUS PROTECT
-        // ==========================================
+        // ==========================================
+        // 5. INITIALIZATION & FOCUS PROTECT
+        // ==========================================
 
-        document.getElementById('realStartBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('realStartBtn');
-            btn.disabled = true;
-            btn.innerText = "Securing Path...";
+        document.getElementById('realStartBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('realStartBtn');
+            btn.disabled = true;
+            btn.innerText = "Securing Path...";
 
-            const ready = await initializeHardware();
-            if(!ready) {
-                btn.disabled = false;
-                btn.innerText = "Authorize & Start Session";
-                return;
-            }
+            const ready = await initializeHardware();
+            if(!ready) {
+                btn.disabled = false;
+                btn.innerText = "Authorize & Start Session";
+                return;
+            }
 
-            document.getElementById('preStartModal').style.display = "none";
-            isProctoringActive = true;
-            
-            globalSecondsRemaining = (parseInt(localStorage.getItem('interviewDuration')) || 10) * 60;
-            runGlobalClock();
-            setupFaceWatch();
-            submitToBackend("");
-        });
+            document.getElementById('preStartModal').style.display = "none";
+            isProctoringActive = true;
+            
+            globalSecondsRemaining = (parseInt(localStorage.getItem('interviewDuration')) || 10) * 60;
+            runGlobalClock();
+            setupFaceWatch();
+            submitToBackend("");
+        });
 
-        window.onblur = function() {
-            if(isProctoringActive) {
-                terminateSession("System Violation: Interview window lost focus (clicked desktop or taskbar).");
-            }
-        };
+        window.onblur = function() {
+            if(isProctoringActive) {
+                terminateSession("System Violation: Interview window lost focus (clicked desktop or taskbar).");
+            }
+        };
 
-        document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement && isProctoringActive && !isMobileCheck()) {
-                terminateSession("System Violation: Fullscreen exit detected.");
-            }
-        });
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && isProctoringActive && !isMobileCheck()) {
+                terminateSession("System Violation: Fullscreen exit detected.");
+            }
+        });
 
-        document.addEventListener('visibilitychange', () => {
-            if(document.hidden && isProctoringActive) {
-                terminateSession("System Violation: Switched browser tabs.");
-            }
-        });
+        document.addEventListener('visibilitychange', () => {
+            if(document.hidden && isProctoringActive) {
+                terminateSession("System Violation: Switched browser tabs.");
+            }
+        });
 
-    </script>
+    </script>
 </body>
-</html> 
-make a deep and indepth analysis of code find errors and lags and all issues and list them
+</html>
