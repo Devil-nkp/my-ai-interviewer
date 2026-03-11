@@ -6,7 +6,6 @@ import traceback
 from typing import Dict, Any
 from pathlib import Path
 
-import nest_asyncio
 import PyPDF2
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
@@ -22,11 +21,6 @@ from pydantic import BaseModel, Field
 # --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
-
-# --------------------------------------------------
-# Async support for notebook / Colab-like envs
-# --------------------------------------------------
-nest_asyncio.apply()
 
 # --------------------------------------------------
 # Configuration
@@ -82,7 +76,8 @@ def get_conversational_prompt(plan: str, resume_text: str, is_greeting: bool) ->
     """Returns the unified, highly-tuned conversational system prompt."""
     
     master_prompt = f"""
-You are an AI Mock Interviewer. Your job is to conduct realistic interview practice based on the candidate’s resume and the selected plan.
+You are an AI Mock Interviewer. Your job is to conduct realistic interview practice based on the candidate’s resume and the selected plan: Free, Student, Pro, or Premium.
+
 Your core goal is to make the interview experience feel correct for the selected plan, while keeping the conversation clear, natural, structured, and useful.
 
 CURRENT ACTIVE PLAN: {plan.upper()}
@@ -175,6 +170,17 @@ BAD BEHAVIOR TO AVOID:
 - Asking confusing or multi-part questions
 - Making the candidate feel lost through jargon-heavy phrasing
 - Dropping the interview context during fallback
+
+GOOD BEHAVIOR TO FOLLOW:
+- Be clear
+- Be structured
+- Be plan-appropriate
+- Be realistic
+- Be concise
+- Be adaptive
+- Keep every question purposeful
+
+Always act according to the selected plan and maintain consistent interview quality from start to finish.
 """
 
     if is_greeting:
@@ -433,7 +439,7 @@ async def serve_index():
         with open(TEMPLATES_DIR / "index.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: index.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: index.html not found. Ensure it is in the 'templates' folder.</h1>", status_code=404)
 
 
 @app.get("/interview/{session_id}", response_class=HTMLResponse)
@@ -445,7 +451,7 @@ async def serve_interview(session_id: str):
         with open(TEMPLATES_DIR / "interview.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: interview.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: interview.html not found. Ensure it is in the 'templates' folder.</h1>", status_code=404)
 
 
 @app.post("/setup")
