@@ -11,6 +11,7 @@
 
     <style>
         :root {
+            /* Corporate Professional Palette */
             --primary: #2563eb; 
             --primary-hover: #1d4ed8; 
             --primary-light: #eff6ff; 
@@ -41,6 +42,7 @@
             flex-direction: column; 
             align-items: center; 
             min-height: 100vh; 
+            /* SCROLL FIX APPLIED HERE */
             overflow-x: hidden;
             overflow-y: auto; 
             padding-bottom: 80px;
@@ -51,6 +53,7 @@
             z-index: -1; object-fit: cover; opacity: 0.04; filter: grayscale(100%);
         }
 
+        /* Top Navigation Status Bar */
         .status-bar {
             position: fixed; top: 0; left: 0; width: 100%; height: 75px;
             background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
@@ -77,6 +80,7 @@
             animation: pulse-red 1s infinite; 
         }
 
+        /* Main Interaction Stage */
         .main-stage {
             margin-top: 120px; width: 90%; max-width: 850px;
             background: var(--bg-card); border: 1px solid var(--border-color);
@@ -252,6 +256,7 @@
     </div>
 
     <script>
+        // Global Constants & State
         lucide.createIcons();
         const sessionId = window.location.pathname.split('/').pop();
         let isProctoringActive = false;
@@ -264,10 +269,14 @@
         let globalSecondsRemaining = 0;
         let globalTimerInterval, lastFaceCheck = 0;
 
-        // --- NEW AUDIO LOGIC VARIABLES ---
+        // --- NEW INFINITE AUDIO & 20s SILENCE ENGINE VARIABLES ---
         let silenceTimer;
-        let finalTranscript = "";
-        const SILENCE_LIMIT_MS = 20000; // 20 Seconds of pure silence required to trigger evaluation
+        let visualSilenceInterval;
+        let silenceCountdown = 20;
+        let accumulatedTranscript = "";
+        let currentSessionTranscript = "";
+        let intentionalStop = false;
+        const SILENCE_LIMIT_MS = 20000; // 20 Seconds pure silence limit
 
         const orb = document.getElementById('aiOrb');
         const status = document.getElementById('statusText');
@@ -276,12 +285,22 @@
         const micBtn = document.getElementById('micBtn');
         const transcriptDiv = document.getElementById('transcript');
 
+        // ==========================================
+        // 1. HARDWARE KILL ENGINE
+        // ==========================================
+
         function stopAllMedia() {
-            if (mpCamera) mpCamera.stop();
+            console.log("PRIVACY KILL: Hard-stopping all devices.");
+            
+            if (mpCamera) {
+                mpCamera.stop();
+            }
+
             if (cameraStream) {
                 cameraStream.getTracks().forEach(track => track.stop());
                 cameraStream = null;
             }
+
             if (screenStream) {
                 screenStream.getTracks().forEach(track => track.stop());
                 screenStream = null;
@@ -302,7 +321,9 @@
 
         async function initializeHardware() {
             try {
-                cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
+                cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720 }, audio: true 
+                });
                 document.getElementById('cameraPreview').srcObject = cameraStream;
 
                 if(!isMobileCheck()) {
@@ -315,8 +336,10 @@
                 if (!document.fullscreenElement && !isMobileCheck()) {
                     await document.documentElement.requestFullscreen();
                 }
+
                 return true;
             } catch(e) {
+                console.error(e);
                 alert("Authorization Denied: Camera, Microphone, and Screen Sharing are required.");
                 return false;
             }
@@ -326,9 +349,17 @@
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
+        // ==========================================
+        // 2. SPEECH & PERSISTENCE ENGINE
+        // ==========================================
+
         function initNeuralVoice() {
             const voices = speechSynthesis.getVoices();
-            femaleVoice = voices.find(v => v.name.includes('Google UK English Female') || v.name.includes('Samantha') || v.name.includes('Female'));
+            femaleVoice = voices.find(v => 
+                v.name.includes('Google UK English Female') || 
+                v.name.includes('Samantha') || 
+                v.name.includes('Female')
+            );
             if(!femaleVoice) femaleVoice = voices[0];
         }
         initNeuralVoice();
@@ -336,8 +367,10 @@
 
         function speak(text, onEnd) {
             speechSynthesis.cancel();
+            
             if (!isProctoringActive && !text.includes("Evaluation") && !text.includes("Warning")) return;
 
+            // Only update the question buffer if it's an actual interview question
             if (!text.includes("Warning") && !text.includes("Resuming")) {
                 lastFullQuestionText = text;
             }
@@ -350,7 +383,12 @@
                 orb.className = "orb speaking";
                 status.innerText = "Recruiter is speaking...";
                 micBtn.disabled = true;
-                clearTimeout(silenceTimer); // Pause silence timer while AI is talking
+                
+                // Stop any listening logic while AI speaks
+                intentionalStop = true;
+                clearTimeout(silenceTimer); 
+                clearInterval(visualSilenceInterval);
+                if(recognition) recognition.stop();
             };
 
             utterance.onend = () => {
@@ -364,7 +402,7 @@
         }
 
         // ==========================================
-        // DYNAMIC 20-SECOND SILENCE ENGINE
+        // 3. INFINITE LISTENING & 20s SILENCE ENGINE
         // ==========================================
         if ('webkitSpeechRecognition' in window) {
             recognition = new webkitSpeechRecognition();
@@ -378,52 +416,96 @@
             };
 
             recognition.onresult = (event) => {
-                let tempTranscript = "";
-                for (let i = 0; i < event.results.length; ++i) {
-                    tempTranscript += event.results[i][0].transcript;
+                let interimTranscript = "";
+                let finalSegment = "";
+                
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalSegment += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
                 }
                 
-                finalTranscript = tempTranscript;
+                if (finalSegment) {
+                    accumulatedTranscript += " " + finalSegment;
+                }
+                
+                currentSessionTranscript = accumulatedTranscript + " " + interimTranscript;
 
                 // As long as the user is speaking, reset the 20-second doom clock
-                if(finalTranscript.trim().length > 0) {
-                    timerWarn.style.color = "var(--success)";
-                    timerWarn.innerText = "Audio detected. Speak as long as you need...";
+                if(currentSessionTranscript.trim().length > 0) {
                     resetSilenceTimer();
                 }
             };
             
-            recognition.onend = () => { orb.className = "orb"; };
+            recognition.onend = () => { 
+                // Native API auto-stops on pauses. If we didn't intentionally stop it, restart it instantly.
+                if (!intentionalStop && isProctoringActive && !isWarningCooldown) {
+                    try { recognition.start(); } catch(e) {}
+                } else {
+                    orb.className = "orb"; 
+                }
+            };
         }
 
         function startAnswerTimer() {
             if(!isProctoringActive || isWarningCooldown) return;
             
-            finalTranscript = "";
-            timerWarn.style.color = "var(--primary)";
-            timerWarn.innerText = "Listening... (Will evaluate after 20s of silence)";
+            accumulatedTranscript = "";
+            currentSessionTranscript = "";
+            intentionalStop = false;
             
-            if(recognition) recognition.start();
+            timerWarn.style.color = "var(--primary)";
+            timerWarn.innerText = "Listening... Take your time. (Evaluates after 20s of silence)";
+            
+            try { if(recognition) recognition.start(); } catch(e){}
             resetSilenceTimer();
         }
 
         function resetSilenceTimer() {
             clearTimeout(silenceTimer);
+            clearInterval(visualSilenceInterval);
+            
+            silenceCountdown = 20;
+            timerWarn.style.color = "var(--success)";
+            timerWarn.innerText = "Audio detected. Speak as long as you need...";
+            
+            // Visual Countdown for UX
+            visualSilenceInterval = setInterval(() => {
+                silenceCountdown--;
+                if(silenceCountdown <= 15) {
+                    timerWarn.style.color = "var(--warning)";
+                    timerWarn.innerText = `Silence detected... Evaluating in ${silenceCountdown}s`;
+                }
+                if(silenceCountdown <= 5) {
+                    timerWarn.style.color = "var(--danger)";
+                }
+            }, 1000);
+
+            // Hard 20-second silence cut-off
             silenceTimer = setTimeout(() => {
+                clearInterval(visualSilenceInterval);
+                intentionalStop = true; // Tell onend NOT to restart
                 if(recognition) recognition.stop();
                 
-                // If 20 seconds pass and they said nothing, send timeout. Otherwise, send what they said.
-                if(finalTranscript.trim().length > 0) {
-                    submitToBackend(finalTranscript.trim());
+                let finalOutput = currentSessionTranscript.trim();
+                if(finalOutput.length > 0) {
+                    submitToBackend(finalOutput);
                 } else {
                     submitToBackend("[NO_ANSWER_TIMEOUT]");
                 }
             }, SILENCE_LIMIT_MS);
         }
+
+        // ==========================================
+        // 4. PROCTORING & APP PROTECTION
         // ==========================================
 
         function setupFaceWatch() {
-            const faceDetection = new FaceDetection({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` });
+            const faceDetection = new FaceDetection({ 
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` 
+            });
             faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.6 });
             faceDetection.onResults(results => {
                 const now = Date.now();
@@ -458,10 +540,13 @@
             }
             
             isProctoringActive = false;
+            intentionalStop = true;
             speechSynthesis.cancel();
             if(recognition) recognition.stop();
             clearTimeout(silenceTimer);
+            clearInterval(visualSilenceInterval);
             
+            // Speak the warning out loud
             const msg = new SpeechSynthesisUtterance("Warning " + warnings + ". " + reason);
             msg.voice = femaleVoice;
             speechSynthesis.speak(msg);
@@ -473,12 +558,20 @@
             setTimeout(() => {
                 document.getElementById('warningScreen').style.display = "none";
                 isProctoringActive = true;
+                // Natural resuming speech
                 speak("Resuming session. " + lastFullQuestionText, startAnswerTimer);
             }, 5500);
         }
 
+        // ==========================================
+        // 5. SESSION FLOW
+        // ==========================================
+
         async function submitToBackend(text) {
+            intentionalStop = true;
             clearTimeout(silenceTimer);
+            clearInterval(visualSilenceInterval);
+            
             if (text && text !== "" && !text.includes("[")) appendTranscript('user', text);
             
             status.innerText = "Analyzing Neural Link...";
@@ -523,6 +616,7 @@
 
         function terminateSession(reason) {
             isProctoringActive = false;
+            intentionalStop = true;
             speechSynthesis.cancel();
             stopAllMedia();
             if(document.fullscreenElement) document.exitFullscreen().catch(e => {});
@@ -534,6 +628,7 @@
 
         function endInterview(data) {
             isProctoringActive = false;
+            intentionalStop = true;
             speechSynthesis.cancel();
             stopAllMedia();
             if(document.fullscreenElement) document.exitFullscreen().catch(e => {});
@@ -554,6 +649,10 @@
             transcriptDiv.appendChild(div);
             transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
         }
+
+        // ==========================================
+        // 6. INITIALIZATION & FOCUS PROTECT
+        // ==========================================
 
         document.getElementById('realStartBtn').addEventListener('click', async () => {
             const btn = document.getElementById('realStartBtn');
