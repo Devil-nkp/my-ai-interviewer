@@ -42,9 +42,7 @@
             flex-direction: column; 
             align-items: center; 
             min-height: 100vh; 
-            overflow-x: hidden;
-            overflow-y: auto; 
-            padding-bottom: 80px;
+            overflow: hidden; 
         }
 
         #bgVideo { 
@@ -260,16 +258,14 @@
         const sessionId = window.location.pathname.split('/').pop();
         let isProctoringActive = false;
         let warnings = 0;
-        let softBlurWarnings = 0; // Soft warning counter for UI disruptions
         let isWarningCooldown = false;
         
         let cameraStream, screenStream, recognition, femaleVoice, mpCamera;
-        let lastFullQuestionText = ""; 
+        let lastFullQuestionText = ""; // Persistent question buffer
         
-        let globalEndTime = 0; // Fix: Replacing variable drift countdown with absolute target time
+        let globalSecondsRemaining = 0;
         let answerCountdown = 10;
         let globalTimerInterval, answerTimerInterval, silenceTimer, lastFaceCheck = 0;
-        let lastFrameProcess = 0; // Throttle for MediaPipe
 
         const orb = document.getElementById('aiOrb');
         const status = document.getElementById('statusText');
@@ -279,16 +275,24 @@
         const transcriptDiv = document.getElementById('transcript');
 
         // ==========================================
-        // 1. HARDWARE KILL ENGINE
+        // 1. HARDWARE KILL ENGINE (TAB ICON FIX)
         // ==========================================
 
         function stopAllMedia() {
             console.log("PRIVACY KILL: Hard-stopping all devices.");
             
-            if (mpCamera) { mpCamera.stop(); }
+            // Critical: Kill MediaPipe's internal capture loop
+            if (mpCamera) {
+                mpCamera.stop();
+                console.log("MediaPipe Camera instance halted.");
+            }
 
+            // Iterate and stop every audio/video track
             if (cameraStream) {
-                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log("Track killed: " + track.kind);
+                });
                 cameraStream = null;
             }
 
@@ -297,11 +301,13 @@
                 screenStream = null;
             }
 
+            // Release DOM resources
             const video = document.getElementById('cameraPreview');
             video.srcObject = null;
             video.style.opacity = '0';
             setTimeout(() => video.style.display = 'none', 500);
 
+            // Update UI Banner
             const banner = document.getElementById('hwStatus');
             if(banner) {
                 banner.className = "hardware-banner hw-dead";
@@ -312,16 +318,23 @@
 
         async function initializeHardware() {
             try {
+                // Request Camera/Mic
                 cameraStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { width: 1280, height: 720 }, audio: true 
                 });
                 document.getElementById('cameraPreview').srcObject = cameraStream;
 
+                // Request Screen
                 if(!isMobileCheck()) {
                     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
                     screenStream.getVideoTracks()[0].onended = () => {
                         terminateSession("Violation: Screen sharing was manually stopped.");
                     };
+                }
+
+                // High-Security Fullscreen
+                if (!document.fullscreenElement && !isMobileCheck()) {
+                    await document.documentElement.requestFullscreen();
                 }
 
                 return true;
@@ -340,33 +353,29 @@
         // 2. SPEECH & PERSISTENCE ENGINE
         // ==========================================
 
-        // Async Voice Loader fix to prevent empty voices
         function initNeuralVoice() {
-            return new Promise((resolve) => {
-                let voices = speechSynthesis.getVoices();
-                if (voices.length > 0) {
-                    femaleVoice = voices.find(v => v.name.includes('Google UK English Female') || v.name.includes('Samantha') || v.name.includes('Female')) || voices[0];
-                    resolve();
-                } else {
-                    speechSynthesis.onvoiceschanged = () => {
-                        voices = speechSynthesis.getVoices();
-                        femaleVoice = voices.find(v => v.name.includes('Google UK English Female') || v.name.includes('Samantha') || v.name.includes('Female')) || voices[0];
-                        resolve();
-                    };
-                }
-            });
+            const voices = speechSynthesis.getVoices();
+            femaleVoice = voices.find(v => 
+                v.name.includes('Google UK English Female') || 
+                v.name.includes('Samantha') || 
+                v.name.includes('Female')
+            );
+            if(!femaleVoice) femaleVoice = voices[0];
         }
+        initNeuralVoice();
+        speechSynthesis.onvoiceschanged = initNeuralVoice;
 
         function speak(text, onEnd) {
             speechSynthesis.cancel();
-            if (!isProctoringActive && !text.includes("Evaluation") && !text.includes("Warning")) return;
+            
+            // Privacy check: No speaking after termination
+            if (!isProctoringActive && !text.includes("Evaluation")) return;
 
-            if (!text.includes("Warning") && !text.includes("Resuming")) {
-                lastFullQuestionText = text;
-            }
+            // Update persistent buffer
+            lastFullQuestionText = text;
 
             const utterance = new SpeechSynthesisUtterance(text);
-            if(femaleVoice) utterance.voice = femaleVoice;
+            utterance.voice = femaleVoice;
             utterance.rate = 1.03;
             
             utterance.onstart = () => {
@@ -385,10 +394,8 @@
             speechSynthesis.speak(utterance);
         }
 
-        // Browser Compatibility Fix for Speech Recognition
-        const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognitionApi) {
-            recognition = new SpeechRecognitionApi();
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
             recognition.lang = 'en-US';
@@ -405,25 +412,21 @@
                 }
                 
                 if(currentTranscript.length > 5) {
-                    clearInterval(answerTimerInterval);
+                    clearInterval(answerTimerInterval); // User started talking, stop countdown
                     timerWarn.style.color = "var(--success)";
                     timerWarn.innerText = "Audio captured...";
                 }
 
                 clearTimeout(silenceTimer);
-                // Fix: Adjusted silence timer to 2000ms for better responsiveness
                 silenceTimer = setTimeout(() => {
                     if(currentTranscript.trim().length > 0) {
-                        try { recognition.stop(); } catch(e){}
+                        recognition.stop();
                         submitToBackend(currentTranscript.trim());
                     }
-                }, 2000); 
+                }, 4000); 
             };
 
             recognition.onend = () => { orb.className = "orb"; };
-            recognition.onerror = (e) => { console.warn("Recognition Error:", e.error); };
-        } else {
-            console.warn("Speech Recognition not supported in this browser.");
         }
 
         // ==========================================
@@ -435,7 +438,6 @@
                 locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` 
             });
             faceDetection.setOptions({ model: 'short', minDetectionConfidence: 0.6 });
-            
             faceDetection.onResults(results => {
                 const now = Date.now();
                 if(!isProctoringActive || isWarningCooldown || now - lastFaceCheck < 300) return;
@@ -455,24 +457,14 @@
             });
 
             mpCamera = new Camera(document.getElementById('cameraPreview'), {
-                onFrame: async () => { 
-                    // MediaPipe Throttling Fix (running ~5 FPS to stop CPU lag)
-                    const now = Date.now();
-                    if(now - lastFrameProcess > 200) {
-                        lastFrameProcess = now;
-                        await faceDetection.send({image: document.getElementById('cameraPreview')}); 
-                    }
-                },
+                onFrame: async () => { await faceDetection.send({image: document.getElementById('cameraPreview')}); },
                 width: 640, height: 480
             });
             mpCamera.start();
         }
 
         function issueStrike(reason) {
-            if(isWarningCooldown) return; // Prevent race conditions
-            isWarningCooldown = true;
             warnings++;
-            
             if (warnings > 3) {
                 terminateSession("Strikes limit (3/3) exceeded.");
                 return;
@@ -480,12 +472,12 @@
             
             isProctoringActive = false;
             speechSynthesis.cancel();
-            if(recognition) { try{ recognition.stop(); } catch(e){} }
+            if(recognition) recognition.stop();
             clearInterval(answerTimerInterval);
             
-            // Speak the warning out loud
+            // Vocalize Strike
             const msg = new SpeechSynthesisUtterance("Warning " + warnings + ". " + reason);
-            if(femaleVoice) msg.voice = femaleVoice;
+            msg.voice = femaleVoice;
             speechSynthesis.speak(msg);
 
             document.getElementById('warningHeader').innerText = `STRIKE ${warnings}/3`;
@@ -495,8 +487,8 @@
             setTimeout(() => {
                 document.getElementById('warningScreen').style.display = "none";
                 isProctoringActive = true;
-                isWarningCooldown = false;
-                speak("Resuming session. " + lastFullQuestionText, startAnswerTimer);
+                // RESUME LOGIC
+                speak(warnings + " continuing. " + lastFullQuestionText, startAnswerTimer);
             }, 5500);
         }
 
@@ -537,9 +529,7 @@
             timerWarn.innerText = `${answerCountdown}s to start answering...`;
             
             clearInterval(answerTimerInterval);
-            if(recognition) {
-                try { recognition.start(); } catch(e) { console.warn("Recognition double start prevented"); }
-            }
+            if(recognition) recognition.start();
 
             answerTimerInterval = setInterval(() => {
                 answerCountdown--;
@@ -552,23 +542,16 @@
         }
 
         function runGlobalClock() {
-            // Fix: Using absolute end time to prevent drift 
-            const durationMins = parseInt(localStorage.getItem('interviewDuration')) || 10;
-            globalEndTime = Date.now() + (durationMins * 60 * 1000);
-
             globalTimerInterval = setInterval(() => {
-                if (!isProctoringActive) return;
-                
-                let remainingSecs = Math.max(0, Math.floor((globalEndTime - Date.now()) / 1000));
-                
-                const m = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
-                const s = (remainingSecs % 60).toString().padStart(2, '0');
+                if (globalSecondsRemaining <= 0 || !isProctoringActive) return;
+                globalSecondsRemaining--;
+                const m = Math.floor(globalSecondsRemaining / 60).toString().padStart(2, '0');
+                const s = (globalSecondsRemaining % 60).toString().padStart(2, '0');
                 sessionTimerDisplay.innerText = `${m}:${s}`;
 
-                if(remainingSecs < 60) document.getElementById('sessionTimer').classList.add('urgent');
-                if(remainingSecs <= 0) {
+                if(globalSecondsRemaining < 60) document.getElementById('sessionTimer').classList.add('urgent');
+                if(globalSecondsRemaining === 0) {
                     isProctoringActive = false;
-                    clearInterval(globalTimerInterval);
                     speak("Session time is up. Finalizing evaluation.", () => submitToBackend("[SYSTEM_DURATION_EXPIRED]"));
                 }
             }, 1000);
@@ -605,8 +588,7 @@
             div.className = `msg msg-${role}`;
             div.innerHTML = `<strong>${role.toUpperCase()}:</strong> ${text}`;
             transcriptDiv.appendChild(div);
-            // Scroll performance fix
-            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
         }
 
         // ==========================================
@@ -618,14 +600,6 @@
             btn.disabled = true;
             btn.innerText = "Securing Path...";
 
-            // Fullscreen Fix: Trigger immediately on user interaction
-            if (!document.fullscreenElement && !isMobileCheck()) {
-                try { await document.documentElement.requestFullscreen(); } catch(e) { console.warn("FS denied"); }
-            }
-
-            // Voice Loading Bug Fix: Await voices before continuing
-            await initNeuralVoice();
-            
             const ready = await initializeHardware();
             if(!ready) {
                 btn.disabled = false;
@@ -636,20 +610,16 @@
             document.getElementById('preStartModal').style.display = "none";
             isProctoringActive = true;
             
+            globalSecondsRemaining = (parseInt(localStorage.getItem('interviewDuration')) || 10) * 60;
             runGlobalClock();
             setupFaceWatch();
             submitToBackend("");
         });
 
-        // Softened Focus Logic to avoid false positive session kills
+        // FOCUS PROTECTION: End interview if clicking outside or opening desktop apps
         window.onblur = function() {
-            if(isProctoringActive && !isWarningCooldown) {
-                if(softBlurWarnings < 1) {
-                    softBlurWarnings++;
-                    issueStrike("System notification or focus lost. Return to the window immediately.");
-                } else {
-                    terminateSession("System Violation: Interview window lost focus multiple times.");
-                }
+            if(isProctoringActive) {
+                terminateSession("System Violation: Interview window lost focus (clicked desktop or taskbar).");
             }
         };
 
