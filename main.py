@@ -8,6 +8,7 @@ from pathlib import Path
 
 import PyPDF2
 import uvicorn
+import nest_asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -15,6 +16,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 # IMPORT FIX: Using AsyncGroq for high-performance, non-blocking execution on Render
 from groq import AsyncGroq
 from pydantic import BaseModel, Field
+
+# Enable async nesting for Windows/Colab environments
+nest_asyncio.apply()
 
 # --------------------------------------------------
 # Path Configuration for Render
@@ -41,9 +45,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# INIT FIX: Use Async client for fast simultaneous users
-client = AsyncGroq(api_key=GROQ_API_KEY)
 
 # In-memory session store
 sessions: Dict[str, Dict[str, Any]] = {}
@@ -296,6 +297,10 @@ Make the feedback deep, personalized, and realistic.
 # Execution Utilities (ASYNC)
 # --------------------------------------------------
 async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = False) -> str:
+    # BUG FIX: Initialize AsyncGroq INSIDE the function to prevent "Event Loop Closed" errors 
+    # when starting up on Windows/Colab environments.
+    client = AsyncGroq(api_key=GROQ_API_KEY)
+    
     kwargs = {
         "model": DEFAULT_MODEL,
         "messages": messages,
@@ -304,7 +309,6 @@ async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = Fal
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
-    # Fix: Awaiting the async groq client ensures the server isn't blocked and handles users fast
     response = await client.chat.completions.create(**kwargs)
     return response.choices[0].message.content.strip()
 
@@ -327,6 +331,11 @@ def ensure_session(session_id: str) -> Dict[str, Any]:
 
 def safe_json_loads(raw_text: str) -> Dict[str, Any]:
     try:
+        # Prevent markdown markdown wrapper crashes
+        if raw_text.startswith("```json"):
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif raw_text.startswith("```"):
+            raw_text = raw_text.split("```")[1].strip()
         return json.loads(raw_text)
     except Exception:
         return {}
@@ -342,7 +351,6 @@ async def finish_interview(session_id: str) -> Dict[str, Any]:
     prompt = get_evaluation_prompt(plan, session["resume"], session["history"])
 
     try:
-        # Await the groq call
         raw = await call_groq(
             [{"role": "system", "content": prompt}],
             temperature=0.2,
@@ -406,7 +414,6 @@ async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
     
     messages = [{"role": "system", "content": system_prompt}] + session["history"]
 
-    # Await the groq call to prevent lag
     ai_msg = await call_groq(messages, temperature=cfg["temperature"])
     session["history"].append({"role": "assistant", "content": ai_msg})
 
@@ -425,10 +432,12 @@ async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     try:
-        with open(TEMPLATES_DIR / "index.html", "r", encoding="utf-8") as f:
+        # Support both 'templates' directory or root directory based on deployment
+        path = TEMPLATES_DIR / "index.html" if os.path.exists(TEMPLATES_DIR / "index.html") else "index.html"
+        with open(path, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: templates/index.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: index.html not found</h1>", status_code=404)
 
 
 @app.get("/interview/{session_id}", response_class=HTMLResponse)
@@ -437,10 +446,11 @@ async def serve_interview(session_id: str):
         return HTMLResponse("<h1>Session expired or invalid.</h1>", status_code=404)
 
     try:
-        with open(TEMPLATES_DIR / "interview.html", "r", encoding="utf-8") as f:
+        path = TEMPLATES_DIR / "interview.html" if os.path.exists(TEMPLATES_DIR / "interview.html") else "interview.html"
+        with open(path, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: templates/interview.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: interview.html not found</h1>", status_code=404)
 
 
 @app.post("/setup")
@@ -492,7 +502,6 @@ async def next_question(payload: AnswerPayload):
     ensure_session(payload.session_id)
 
     try:
-        # Await the response generator
         response_data = await get_ai_response(payload.session_id, payload.user_answer)
         return JSONResponse(content=response_data)
     except HTTPException:
