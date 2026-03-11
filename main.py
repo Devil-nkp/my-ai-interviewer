@@ -9,7 +9,6 @@ from pathlib import Path
 
 import PyPDF2
 import uvicorn
-import nest_asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -17,9 +16,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 # IMPORT FIX: Using AsyncGroq for high-performance, non-blocking execution on Render
 from groq import AsyncGroq
 from pydantic import BaseModel, Field
-
-# Enable async nesting for Windows/Colab environments
-nest_asyncio.apply()
 
 # --------------------------------------------------
 # Path Configuration for Render
