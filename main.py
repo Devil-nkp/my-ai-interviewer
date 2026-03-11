@@ -1,38 +1,31 @@
 import os
 import io
-import json
 import uuid
+import json
 import traceback
-from typing import Dict, Any
-from pathlib import Path
-
-import PyPDF2
+import nest_asyncio
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+import PyPDF2
 
-# Using AsyncGroq for lag-free, non-blocking execution
-from groq import AsyncGroq
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from groq import Groq
 from pydantic import BaseModel, Field
 
-# --------------------------------------------------
-# Path Configuration for Render
-# --------------------------------------------------
-# Assumes main.py is in the root directory alongside the templates/ folder
-BASE_DIR = Path(__file__).resolve().parent
-TEMPLATES_DIR = BASE_DIR / "templates"
+# Enable async nesting for environments like Google Colab
+nest_asyncio.apply()
 
-# --------------------------------------------------
-# Configuration
-# --------------------------------------------------
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# ==========================================================
+# CONFIG
+# ==========================================================
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY environment variable is missing.")
+    raise RuntimeError("GROQ_API_KEY environment variable is not set.")
 
-DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+MODEL_NAME = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 
-app = FastAPI(title="AI Mock Interviewer SaaS API", version="3.0.0")
+app = FastAPI(title="Mock Interviewer API - Multi Plan")
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,290 +35,423 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Async client for fast, simultaneous user handling
-client = AsyncGroq(api_key=GROQ_API_KEY)
+client = Groq(api_key=GROQ_API_KEY)
 
-# In-memory session store
-sessions: Dict[str, Dict[str, Any]] = {}
+# In-memory storage for active interview sessions
+sessions = {}
 
 VALID_PLANS = {"free", "student", "pro", "premium"}
 
-# Basic limits and parameters per plan
 PLAN_CONFIG = {
-    "free": {"max_turns": 6, "temperature": 0.4},
-    "student": {"max_turns": 10, "temperature": 0.45},
-    "pro": {"max_turns": 16, "temperature": 0.5},
-    "premium": {"max_turns": 20, "temperature": 0.55},
+    "free": {
+        "max_turns": 6,
+        "temperature": 0.4,
+        "max_words": 28,
+        "role_title": "Friendly AI Interview Coach",
+        "opening_style": "simple, warm, confidence-building",
+    },
+    "student": {
+        "max_turns": 10,
+        "temperature": 0.45,
+        "max_words": 35,
+        "role_title": "Campus Placement Interviewer",
+        "opening_style": "professional, realistic, beginner-friendly",
+    },
+    "pro": {
+        "max_turns": 16,
+        "temperature": 0.5,
+        "max_words": 30,
+        "role_title": "Senior Technical Interviewer",
+        "opening_style": "strict but fair, technical, concise",
+    },
+    "premium": {
+        "max_turns": 20,
+        "temperature": 0.55,
+        "max_words": 35,
+        "role_title": "Advanced Hiring Panel Interviewer",
+        "opening_style": "sharp, adaptive, personalized, realistic",
+    },
 }
 
 
-# --------------------------------------------------
-# Request Models
-# --------------------------------------------------
 class AnswerPayload(BaseModel):
     session_id: str = Field(..., min_length=1)
-    user_answer: str = Field(default="")
+    user_answer: str = ""
+
 
 class RejectPayload(BaseModel):
-    reason: str = Field(default="User terminated interview")
+    reason: str = ""
 
 
-# --------------------------------------------------
-# Fine-Tuned Prompt Builders
-# --------------------------------------------------
-def get_conversational_prompt(plan: str, resume_text: str, is_greeting: bool) -> str:
-    """Returns the unified, highly-tuned conversational system prompt."""
-    
-    master_prompt = f"""
-You are an AI Mock Interviewer. Your job is to conduct realistic interview practice based on the candidate’s resume and the selected plan.
-Your core goal is to make the interview experience feel correct for the selected plan, while keeping the conversation clear, natural, structured, and useful.
-
-CURRENT ACTIVE PLAN: {plan.upper()}
-
-Candidate Resume Context:
-{resume_text}
-
-GLOBAL RULES FOR ALL PLANS:
-1. Ask exactly ONE question at a time.
-2. Never ask multiple questions in one response.
-3. Keep questions short, clear, and easy to understand.
-4. Do not give long paragraphs unless it is the final evaluation.
-5. Adapt the difficulty strictly based on the selected plan.
-6. Avoid repeating the same question in a long form.
-7. If the candidate gives a weak or vague answer, ask a shorter and sharper follow-up.
-8. If the candidate is silent, simplify the question while staying in interview context.
-9. Do not turn the interview into casual chat.
-10. Do not become robotic, overly emotional, or overly polite.
-11. Do not praise too much. Use only brief, natural acknowledgment.
-12. Keep the conversation realistic and interview-like.
-13. Use the candidate’s resume to personalize questions whenever useful.
-14. Maintain the correct role and tone for the selected plan.
-15. Every question should have a clear purpose: introduction, validation, technical check, project depth, scenario, or ownership.
-
-PLAN BEHAVIOR RULES:
-
-FREE PLAN:
-- Role: Friendly AI Interview Coach
-- Goal: Build confidence and reduce fear
-- Tone: Friendly, simple, encouraging
-- Difficulty: Beginner only
-- Focus: Self-introduction, resume basics, simple project explanation, very basic HR and technical questions
-- Never ask architecture, scalability, trade-offs, optimization, or deep technical drill-down
-- Keep responses under 25 words whenever possible
-
-STUDENT PLAN:
-- Role: Campus Placement Interviewer
-- Goal: Simulate a realistic fresher interview
-- Tone: Professional, practical, beginner-friendly
-- Difficulty: Moderate
-- Focus: Resume questions, project explanation, beginner technical depth, behavioral questions, simple follow-ups
-- Do not jump into advanced research-level or senior-level questions
-- Keep responses under 35 words whenever possible
-
-PRO PLAN:
-- Role: Senior Technical Interviewer
-- Goal: Test technical depth and project understanding
-- Tone: Strict but fair, technical, direct
-- Difficulty: Deep technical
-- Focus: Workflow, architecture basics, debugging, trade-offs, evaluation, edge cases, technical decisions
-- If the answer is weak, challenge it with a short follow-up
-- Keep responses under 30 words whenever possible
-
-PREMIUM PLAN:
-- Role: Advanced Hiring Panel
-- Goal: Simulate a realistic, high-value hiring round
-- Tone: Sharp, adaptive, realistic, professional
-- Difficulty: Deep and personalized
-- Focus: Ownership, technical depth, system thinking, product thinking, pressure questioning, scenario reasoning
-- Follow-ups must be concise, sharp, and non-repetitive
-- Keep responses under 35 words whenever possible
-
-GREETING RULES:
-- Greet the candidate by name if available in the resume
-- Briefly introduce yourself according to the selected plan
-- Mention one short relevant detail from the resume
-- Ask the first question quickly
-- Do not make the greeting too long
-
-FOLLOW-UP RULES:
-- If the previous answer is good, briefly acknowledge it and move to the next question
-- If the previous answer is weak, ask a shorter and more precise follow-up
-- Do not repeat the full previous question
-- Do not over-explain what you want
-- Keep pressure proportional to the selected plan
-
-Always act according to the selected plan and maintain consistent interview quality from start to finish.
-"""
-
-    if is_greeting:
-        action_directive = "\n\nCURRENT TASK: This is the VERY FIRST message. You MUST execute the 'Greeting rules' perfectly based on the active plan. Ask exactly ONE starting question."
-    else:
-        action_directive = "\n\nCURRENT TASK: Acknowledge the candidate's last answer and ask the NEXT interview question. DO NOT repeat the greeting. Ask exactly ONE question."
-
-    return master_prompt + action_directive
+# ==========================================================
+# HELPERS
+# ==========================================================
+def safe_extract_resume_text(pdf_bytes: bytes) -> str:
+    try:
+        reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+        text_parts = []
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            text_parts.append(page_text.strip())
+        return "\n".join([p for p in text_parts if p]).strip()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse PDF: {str(e)}")
 
 
-def get_evaluation_prompt(plan: str, resume_text: str, history: list) -> str:
-    """Returns the strict JSON evaluation prompt based on the user's plan."""
-    
-    transcript_str = json.dumps(history, ensure_ascii=False)
-
-    base_rules = f"""
-Resume Context:
-{resume_text}
-
-Interview Transcript:
-{transcript_str}
-"""
-
-    if plan == "free":
-        return f"""
-The mock interview session has ended for a Free Plan user.
-{base_rules}
-Task: Evaluate the student in a simple, encouraging, beginner-friendly way.
-Rules:
-- If the student mostly stayed silent or did not answer, give marks = 0.
-- Return valid JSON only.
-- Score must be an integer from 0 to 100.
-
-Return exactly:
-{{
-  "marks": <integer>,
-  "recommendations": "<HTML feedback>"
-}}
-
-Feedback format for "recommendations":
-- ✅ Strengths
-- ❌ Weak Areas
-- 📈 Simple Next Steps
-- 🔒 <strong style='color:#2563eb;'>Upgrade to Student or Pro</strong> to see your exact technical mistakes!
-
-Keep the feedback easy to understand, supportive, and short.
-"""
-    elif plan == "student":
-        return f"""
-The mock interview session has ended for a Student Plan user.
-{base_rules}
-Task: Evaluate the candidate like a realistic campus placement interviewer.
-Rules:
-- If the student mostly stayed silent or did not answer, give marks = 0.
-- Return valid JSON only.
-
-Return exactly:
-{{
-  "marks": <integer>,
-  "recommendations": "<HTML feedback>"
-}}
-
-Feedback format for "recommendations":
-- ✅ Strengths
-- ❌ Mistakes / weak answers
-- 📈 Areas to improve before real interviews
-- 🔒 <strong style='color:#2563eb;'>Upgrade to Pro</strong> to unlock deep system-design feedback!
-"""
-    elif plan == "pro":
-        return f"""
-The technical interview session has ended for a Pro Plan user.
-{base_rules}
-Task: Strictly evaluate the candidate’s technical depth, clarity, reasoning, and project understanding.
-Rules:
-- If the candidate mostly stayed silent or did not answer, give marks = 0.
-- Return valid JSON only.
-- Score must be an integer from 0 to 100.
-
-Return exactly:
-{{
-  "marks": <integer>,
-  "recommendations": "<HTML feedback>"
-}}
-
-Feedback format for "recommendations":
-- ✅ Technical Strengths
-- ❌ Technical Mistakes
-- 📈 Advanced Topics to Improve
-"""
-    else: # premium
-        return f"""
-The advanced interview session has ended for a Premium Plan user.
-{base_rules}
-Task: Evaluate the candidate like a hiring panel assessing technical skill, product thinking, system reasoning, ownership, and communication quality.
-Rules:
-- If the candidate mostly stayed silent or did not answer, give marks = 0.
-- Return valid JSON only.
-
-Return exactly:
-{{
-  "marks": <integer>,
-  "recommendations": "<HTML feedback>"
-}}
-
-Feedback format for "recommendations":
-- ✅ Strongest Signals
-- ❌ Gaps / Weaknesses
-- 📈 Priority Improvements
-- 🎯 Interview Readiness Level
-"""
+def get_session(session_id: str):
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Invalid Session")
+    return sessions[session_id]
 
 
-# --------------------------------------------------
-# Execution Utilities (ASYNC)
-# --------------------------------------------------
-async def call_groq(messages, *, temperature: float = 0.4, json_mode: bool = False) -> str:
+def call_llm(messages, temperature=0.4, json_mode=False):
     kwargs = {
-        "model": DEFAULT_MODEL,
+        "model": MODEL_NAME,
         "messages": messages,
         "temperature": temperature,
     }
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
-    # Prevents server lag by awaiting the external API call
-    response = await client.chat.completions.create(**kwargs)
+    response = client.chat.completions.create(**kwargs)
     return response.choices[0].message.content.strip()
 
 
-def extract_pdf_text(pdf_bytes: bytes) -> str:
-    try:
-        reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-        pages = [page.extract_text() or "" for page in reader.pages]
-        return "\n".join([p for p in pages if p]).strip()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(e)}")
+def get_candidate_name_hint(resume_text: str) -> str:
+    first_line = resume_text.splitlines()[0].strip() if resume_text.splitlines() else ""
+    if first_line:
+        return first_line[:80]
+    return "Candidate"
 
 
-def ensure_session(session_id: str) -> Dict[str, Any]:
-    session = sessions.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Invalid or expired session.")
-    return session
+def build_master_prompt(plan: str, resume_text: str, silence_count: int, turn_count: int) -> str:
+    cfg = PLAN_CONFIG[plan]
+
+    if plan == "free":
+        return f"""
+You are a {cfg['role_title']}.
+
+Candidate resume:
+{resume_text}
+
+GLOBAL RULES:
+- Ask exactly ONE question at a time.
+- Keep every response short, natural, and easy to understand.
+- Keep response under {cfg['max_words']} words whenever possible.
+- Stay inside interview context.
+- Do not ask multiple questions.
+- Do not use long paragraphs.
+- Do not become robotic.
+
+FREE PLAN RULES:
+- Goal: build confidence and reduce fear.
+- Ask only simple beginner-friendly questions.
+- Focus on self-introduction, degree, current year, simple project explanation, basic HR, very basic technical questions.
+- Never ask architecture, scalability, trade-offs, latency optimization, model evaluation depth, debugging depth, or advanced scenario questions.
+- If the user is silent, simplify the question but keep it interview-related.
+- Do not keep repeating "don't worry" too often.
+- Friendly tone, simple language.
+
+Good examples:
+- Can you introduce yourself briefly?
+- What are you studying now?
+- Can you explain one project from your resume?
+- What was your role in that project?
+- Which technology did you use most?
+
+Bad examples:
+- Explain trade-offs between model accuracy and deployment speed.
+- How would you optimize this architecture for scale?
+"""
+
+    if plan == "student":
+        return f"""
+You are a {cfg['role_title']}.
+
+Candidate resume:
+{resume_text}
+
+GLOBAL RULES:
+- Ask exactly ONE question at a time.
+- Keep every response clear and professional.
+- Keep response under {cfg['max_words']} words whenever possible.
+- Do not ask multiple questions.
+- Avoid long paragraphs.
+
+STUDENT PLAN RULES:
+- Goal: simulate a realistic fresher interview.
+- Focus on resume-based questions, project explanation, beginner technical depth, basic behavioral questions, and simple follow-ups.
+- Moderate challenge only.
+- Do not jump into senior-level or research-level questioning.
+- If the answer is weak, ask a simpler, targeted follow-up.
+
+Good examples:
+- Can you explain your project in simple steps?
+- Why did you choose this approach?
+- What challenge did you face?
+- What would you improve in this project?
+"""
+
+    if plan == "pro":
+        return f"""
+You are a {cfg['role_title']}.
+
+Candidate resume:
+{resume_text}
+
+GLOBAL RULES:
+- Ask exactly ONE question at a time.
+- Keep every response concise and technical.
+- Keep response under {cfg['max_words']} words whenever possible.
+- Do not ask multiple questions.
+- Do not write long explanations.
+
+PRO PLAN RULES:
+- Goal: test technical depth and real project understanding.
+- Focus on architecture basics, workflow, debugging, model behavior, evaluation, trade-offs, edge cases, and technical decisions.
+- Be strict but fair.
+- If the answer is vague, challenge it with a short, sharper follow-up.
+- Keep questions direct.
+
+Good examples:
+- Walk me through the workflow from input to output.
+- Why did you choose OCR before NLP?
+- How would you reduce false positives?
+- What metric would you use here?
+"""
+
+    return f"""
+You are a {cfg['role_title']}.
+
+Candidate resume:
+{resume_text}
+
+GLOBAL RULES:
+- Ask exactly ONE question at a time.
+- Keep every response concise, realistic, and sharp.
+- Keep response under {cfg['max_words']} words whenever possible.
+- Do not ask multiple questions.
+- Avoid long paragraphs.
+
+PREMIUM PLAN RULES:
+- Goal: simulate an advanced hiring panel.
+- Focus on ownership, technical depth, system thinking, product thinking, scenario reasoning, and realistic pressure follow-ups.
+- Personalize questions based on the resume.
+- If the answer is weak, use a shorter, sharper follow-up.
+- Do not repeat the full original question in long form.
+
+Good examples:
+- What exact part of this project did you personally own?
+- Which component did you build yourself?
+- How did you verify its quality?
+- What would break first at scale?
+"""
 
 
-def safe_json_loads(raw_text: str) -> Dict[str, Any]:
-    try:
-        return json.loads(raw_text)
-    except Exception:
-        return {}
+def build_greeting_prompt(plan: str, resume_text: str) -> str:
+    cfg = PLAN_CONFIG[plan]
+    name_hint = get_candidate_name_hint(resume_text)
+
+    if plan == "free":
+        return f"""
+You are a {cfg['role_title']}.
+Candidate resume:
+{resume_text}
+
+Task:
+- Greet the candidate naturally using their name if visible.
+- Briefly introduce yourself.
+- Mention one short positive detail from the resume.
+- Ask exactly ONE easy opening question.
+- Keep response under {cfg['max_words']} words.
+- Start with a self-introduction or simple project question.
+
+Example style:
+Hello [Name], I’m your AI Interview Coach. I noticed you are studying AI & Data Science. Let’s begin. Can you briefly introduce yourself?
+"""
+
+    if plan == "student":
+        return f"""
+You are a {cfg['role_title']}.
+Candidate resume:
+{resume_text}
+
+Task:
+- Greet the candidate naturally.
+- Introduce yourself as a placement interviewer.
+- Mention one relevant project or skill from the resume.
+- Ask exactly ONE realistic fresher-level opening question.
+- Keep response under {cfg['max_words']} words.
+"""
+
+    if plan == "pro":
+        return f"""
+You are a {cfg['role_title']}.
+Candidate resume:
+{resume_text}
+
+Task:
+- Greet the candidate by name if visible.
+- Briefly introduce yourself as a Senior Technical Interviewer.
+- Mention one technically strong detail from the resume.
+- Ask exactly ONE deep opening question.
+- Keep response under {cfg['max_words']} words.
+"""
+
+    return f"""
+You are a {cfg['role_title']}.
+Candidate resume:
+{resume_text}
+
+Task:
+- Greet the candidate by name if visible.
+- Briefly introduce yourself as part of the premium hiring panel.
+- Mention one strong project detail from the resume.
+- Ask exactly ONE ownership-focused or high-value opening question.
+- Keep response under {cfg['max_words']} words.
+"""
 
 
-# --------------------------------------------------
-# Core Interview Engine (ASYNC)
-# --------------------------------------------------
-async def finish_interview(session_id: str) -> Dict[str, Any]:
-    session = ensure_session(session_id)
+def build_followup_prompt(plan: str, resume_text: str, silence_count: int) -> str:
+    cfg = PLAN_CONFIG[plan]
+
+    common = f"""
+You are continuing the interview for the {plan.upper()} plan.
+
+Candidate resume:
+{resume_text}
+
+Rules:
+- Ask exactly ONE question.
+- Keep response under {cfg['max_words']} words.
+- Keep it natural and interview-like.
+- Do not write long paragraphs.
+- Do not ask multiple questions.
+- If the candidate answer was vague, ask a shorter and more precise follow-up.
+"""
+
+    if plan == "free":
+        return common + f"""
+FREE PLAN BEHAVIOR:
+- Stay simple and beginner-friendly.
+- If silence_count is high, simplify gradually but keep interview context.
+- Fallback order:
+  1. Tell me about yourself.
+  2. Tell me your degree and current year.
+  3. What are you studying?
+  4. Name one project from your resume.
+  5. What technology did you use?
+
+Avoid:
+- trade-offs
+- architecture
+- optimization
+- scalability
+- deep technical pressure
+"""
+
+    if plan == "student":
+        return common + """
+STUDENT PLAN BEHAVIOR:
+- Keep it realistic for freshers.
+- Ask about project flow, technology choice, simple challenges, and basic technical concepts.
+- Moderate pressure only.
+"""
+
+    if plan == "pro":
+        return common + """
+PRO PLAN BEHAVIOR:
+- Keep it technical, short, and challenging.
+- Focus on workflow, technical decisions, metrics, debugging, edge cases, and system behavior.
+- If the candidate is vague, challenge them briefly.
+"""
+
+    return common + """
+PREMIUM PLAN BEHAVIOR:
+- Keep it sharp, personalized, and realistic.
+- Focus on ownership, validation, technical depth, product/system thinking, and cross-checking.
+- If the candidate is vague, challenge them with a shorter follow-up.
+- Do not repeat the full previous question.
+"""
+
+
+def build_evaluation_prompt(plan: str, resume_text: str, history: list) -> str:
+    if plan == "free":
+        feedback_style = """
+Keep feedback simple, short, supportive, and beginner-friendly.
+Use:
+- ✅ Strengths
+- ❌ Weak Areas
+- 📈 Next Steps
+"""
+    elif plan == "student":
+        feedback_style = """
+Keep feedback practical and placement-oriented.
+Use:
+- ✅ Strengths
+- ❌ Mistakes
+- 📈 Areas to Improve
+"""
+    elif plan == "pro":
+        feedback_style = """
+Keep feedback technical and exact.
+Use:
+- ✅ Technical Strengths
+- ❌ Technical Mistakes
+- 📈 Advanced Topics to Improve
+"""
+    else:
+        feedback_style = """
+Keep feedback deep, realistic, and personalized.
+Use:
+- ✅ Strongest Signals
+- ❌ Gaps / Weaknesses
+- 📈 Priority Improvements
+- 🎯 Interview Readiness
+"""
+
+    return f"""
+The mock interview session has ended for the {plan.upper()} plan.
+
+Resume Context:
+{resume_text}
+
+Interview Transcript:
+{json.dumps(history, ensure_ascii=False)}
+
+Scoring Rules:
+1. If the candidate mostly stayed silent, did not answer, or timeout markers dominate the transcript, give marks = 0.
+2. Score must be an integer from 0 to 100.
+3. Return valid JSON only.
+4. Do not give sympathy marks.
+
+Return exactly:
+{{
+  "marks": <integer>,
+  "recommendations": "<HTML feedback>"
+}}
+
+{feedback_style}
+Use <br><br> between sections.
+"""
+
+
+def evaluate_interview(session_id: str):
+    session = get_session(session_id)
     plan = session["plan"]
-    
-    prompt = get_evaluation_prompt(plan, session["resume"], session["history"])
+
+    prompt = build_evaluation_prompt(plan, session["resume"], session["history"])
 
     try:
-        raw = await call_groq(
+        response = call_llm(
             [{"role": "system", "content": prompt}],
             temperature=0.2,
             json_mode=True
         )
-        data = safe_json_loads(raw)
+        data = json.loads(response)
 
         marks = data.get("marks", 0)
-        recommendations = data.get("recommendations", "Interview completed.<br><br>Feedback generated.")
+        recommendations = data.get("recommendations", "Interview completed.")
 
         try:
             marks = int(marks)
@@ -338,20 +464,21 @@ async def finish_interview(session_id: str) -> Dict[str, Any]:
             "action": "finish",
             "marks": marks,
             "recommendations": recommendations,
-            "plan": plan,
+            "plan": plan
         }
+
     except Exception:
-        print("Finish Error:\n", traceback.format_exc())
+        print("Evaluation Error:", traceback.format_exc())
         return {
             "action": "finish",
             "marks": 0,
             "recommendations": "Interview completed.<br><br>There was an error generating the final report.",
-            "plan": plan,
+            "plan": plan
         }
 
 
-async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
-    session = ensure_session(session_id)
+def get_ai_response(session_id, user_text):
+    session = get_session(session_id)
     plan = session["plan"]
     cfg = PLAN_CONFIG[plan]
 
@@ -359,28 +486,53 @@ async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
     is_time_up = "[SYSTEM_DURATION_EXPIRED]" in user_text
     is_timeout = "[NO_ANSWER_TIMEOUT]" in user_text
 
-    # Store candidate response
+    # Save user response
     if user_text and not is_time_up and not is_timeout:
         session["history"].append({"role": "user", "content": user_text})
+        session["silence_count"] = 0
     elif is_timeout:
-        session["history"].append({
-            "role": "user",
-            "content": "[Candidate remained silent or did not answer the question.]"
-        })
+        session["history"].append({"role": "user", "content": "[Candidate remained silent or did not answer the question.]"})
+        session["silence_count"] += 1
 
     session["turn_count"] += 1
 
-    # Finish conditions
+    # Finish when duration ends or max turns reached
     if is_time_up or session["turn_count"] >= cfg["max_turns"]:
-        return await finish_interview(session_id)
+        return evaluate_interview(session_id)
 
-    # Determine if this is the first greeting or a follow-up
-    is_greeting = (session["turn_count"] == 1)
-    system_prompt = get_conversational_prompt(plan, session["resume"], is_greeting)
-    
-    messages = [{"role": "system", "content": system_prompt}] + session["history"]
+    # First greeting
+    if session["turn_count"] == 1:
+        greeting_prompt = build_greeting_prompt(plan, session["resume"])
+        system_prompt = build_master_prompt(plan, session["resume"], session["silence_count"], session["turn_count"])
 
-    ai_msg = await call_groq(messages, temperature=cfg["temperature"])
+        ai_msg = call_llm(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": greeting_prompt},
+            ],
+            temperature=cfg["temperature"]
+        )
+        session["history"].append({"role": "assistant", "content": ai_msg})
+        return {
+            "action": "continue",
+            "text": ai_msg,
+            "plan": plan,
+            "turn_count": session["turn_count"],
+            "remaining_turns": max(cfg["max_turns"] - session["turn_count"], 0)
+        }
+
+    # Follow-up
+    followup_prompt = build_followup_prompt(plan, session["resume"], session["silence_count"])
+    system_prompt = build_master_prompt(plan, session["resume"], session["silence_count"], session["turn_count"])
+
+    ai_msg = call_llm(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": followup_prompt},
+        ] + session["history"],
+        temperature=cfg["temperature"]
+    )
+
     session["history"].append({"role": "assistant", "content": ai_msg})
 
     return {
@@ -388,32 +540,44 @@ async def get_ai_response(session_id: str, user_text: str) -> Dict[str, Any]:
         "text": ai_msg,
         "plan": plan,
         "turn_count": session["turn_count"],
-        "remaining_turns": max(cfg["max_turns"] - session["turn_count"], 0),
+        "remaining_turns": max(cfg["max_turns"] - session["turn_count"], 0)
     }
 
 
-# --------------------------------------------------
-# API Endpoints
-# --------------------------------------------------
+# ==========================================================
+# API ENDPOINTS
+# ==========================================================
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     try:
-        with open(TEMPLATES_DIR / "index.html", "r", encoding="utf-8") as f:
+        with open("index.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: templates/index.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: index.html not found</h1>", status_code=404)
 
 
 @app.get("/interview/{session_id}", response_class=HTMLResponse)
 async def serve_interview(session_id: str):
     if session_id not in sessions:
-        return HTMLResponse("<h1>Session expired or invalid.</h1>", status_code=404)
-
+        return HTMLResponse("<h1>Session Expired or Invalid</h1>", status_code=404)
     try:
-        with open(TEMPLATES_DIR / "interview.html", "r", encoding="utf-8") as f:
+        with open("interview.html", "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        return HTMLResponse("<h1>Error: templates/interview.html not found</h1>", status_code=404)
+        return HTMLResponse("<h1>Error: interview.html not found</h1>", status_code=404)
+
+
+@app.get("/plans")
+async def get_plans():
+    return {
+        "plans": {
+            key: {
+                "max_turns": value["max_turns"],
+                "role_title": value["role_title"]
+            }
+            for key, value in PLAN_CONFIG.items()
+        }
+    }
 
 
 @app.post("/setup")
@@ -422,7 +586,7 @@ async def setup_interview(
     resume_file: UploadFile = File(...),
     plan: str = Form("free")
 ):
-    plan = plan.strip().lower()
+    plan = (plan or "free").strip().lower()
 
     if plan not in VALID_PLANS:
         raise HTTPException(
@@ -435,69 +599,65 @@ async def setup_interview(
 
     pdf_bytes = await resume_file.read()
     if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        raise HTTPException(status_code=400, detail="Uploaded resume is empty.")
 
-    resume_text = extract_pdf_text(pdf_bytes)
+    resume_text = safe_extract_resume_text(pdf_bytes)
     if not resume_text:
-        raise HTTPException(status_code=400, detail="Could not extract text from the resume PDF.")
+        raise HTTPException(status_code=400, detail="Could not extract text from the resume.")
 
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "resume": resume_text,
         "history": [],
         "turn_count": 0,
-        "plan": plan,
+        "silence_count": 0,
         "rejection_reason": None,
-        "created_from": request.client.host if request.client else None,
+        "plan": plan
     }
 
     base_url = str(request.base_url).rstrip("/")
     return {
+        "interview_link": f"{base_url}/interview/{session_id}",
         "session_id": session_id,
         "plan": plan,
-        "interview_link": f"{base_url}/interview/{session_id}",
-        "max_turns": PLAN_CONFIG[plan]["max_turns"],
+        "max_turns": PLAN_CONFIG[plan]["max_turns"]
     }
 
 
 @app.post("/next_question")
 async def next_question(payload: AnswerPayload):
-    ensure_session(payload.session_id)
+    if payload.session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Invalid Session")
 
     try:
-        # Await the response generator
-        response_data = await get_ai_response(payload.session_id, payload.user_answer)
+        response_data = get_ai_response(payload.session_id, payload.user_answer)
         return JSONResponse(content=response_data)
-    except HTTPException:
-        raise
     except Exception:
-        print("AI Response Error:\n", traceback.format_exc())
+        print(f"Error processing AI response: {traceback.format_exc()}")
         return JSONResponse(
             content={
                 "action": "continue",
-                "text": "I lost connection for a moment. Please repeat your answer.",
-            },
-            status_code=200
+                "text": "I lost connection for a second. Could you please repeat your answer?"
+            }
         )
-
-
-@app.post("/finish/{session_id}")
-async def finish_now(session_id: str):
-    ensure_session(session_id)
-    return JSONResponse(content=await finish_interview(session_id))
 
 
 @app.post("/terminate_interview/{session_id}")
 async def terminate(session_id: str, payload: RejectPayload):
-    session = ensure_session(session_id)
-    session["rejection_reason"] = payload.reason
-    return {"status": "recorded", "session_id": session_id}
+    if session_id in sessions:
+        sessions[session_id]["rejection_reason"] = payload.reason
+    return {"status": "recorded"}
 
 
-# --------------------------------------------------
-# Render Start Block
-# --------------------------------------------------
+@app.post("/finish/{session_id}")
+async def finish_interview(session_id: str):
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Invalid Session")
+    return JSONResponse(content=evaluate_interview(session_id))
+
+
+# Server Execution
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    print(f"AI Mock Interviewer API running on port {port}")
+    print(f"Mock Interviewer Server Online on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)
