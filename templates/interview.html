@@ -108,7 +108,6 @@
         #statusText { color: var(--text-dark); font-weight: 700; font-size: 1.2rem; margin-bottom: 10px; }
         #timerWarning { font-weight: 700; color: var(--danger); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; height: 20px; transition: color 0.3s ease; }
 
-        /* NEW CSS: Live Transcript */
         #liveTranscript {
             color: var(--text-muted);
             font-style: italic;
@@ -139,11 +138,10 @@
         .mic-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(37, 99, 235, 0.3); background: var(--primary-hover); }
         .mic-btn:disabled { background: var(--text-muted); cursor: not-allowed; box-shadow: none; }
 
-        /* NEW CSS: Force Submit Button */
         #forceSubmitBtn {
             background: var(--success);
             box-shadow: 0 4px 6px rgba(5, 150, 105, 0.2);
-            display: none; /* Hidden by default */
+            display: none; 
         }
         #forceSubmitBtn:hover {
             background: #047857;
@@ -269,9 +267,14 @@
             <div id="recText" style="line-height: 1.8; color: var(--text-dark);"></div>
         </div>
 
-        <button class="mic-btn" onclick="window.location.href='/'" style="margin-top:40px; background: var(--text-dark);">
-            Return to Portal
-        </button>
+        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 40px; flex-wrap: wrap;">
+            <a id="downloadPdfBtn" href="#" target="_self" class="mic-btn" style="margin-top: 0; background: var(--success); text-decoration: none; color: white;">
+                <i data-lucide="download"></i> <span>Download PDF Report</span>
+            </a>
+            <button class="mic-btn" onclick="window.location.href='/'" style="margin-top: 0; background: var(--text-dark);">
+                Return to Portal
+            </button>
+        </div>
     </div>
 
     <video id="cameraPreview" autoplay muted playsinline></video>
@@ -320,10 +323,10 @@
         const orb = document.getElementById('aiOrb');
         const status = document.getElementById('statusText');
         const timerWarn = document.getElementById('timerWarning');
-        const liveTranscriptDisplay = document.getElementById('liveTranscript'); // NEW DOM element
+        const liveTranscriptDisplay = document.getElementById('liveTranscript'); 
         const sessionTimerDisplay = document.getElementById('sessionTimer').querySelector('span');
         const micBtn = document.getElementById('micBtn');
-        const forceSubmitBtn = document.getElementById('forceSubmitBtn'); // NEW DOM element
+        const forceSubmitBtn = document.getElementById('forceSubmitBtn'); 
         const transcriptDiv = document.getElementById('transcript');
 
         // ==========================================
@@ -424,8 +427,8 @@
                 orb.className = "orb speaking";
                 status.innerText = "Recruiter is speaking...";
                 micBtn.disabled = true;
-                forceSubmitBtn.style.display = 'none'; // Hide submit button while AI talks
-                liveTranscriptDisplay.innerText = ''; // Clear live transcript
+                forceSubmitBtn.style.display = 'none'; 
+                liveTranscriptDisplay.innerText = ''; 
                 
                 // Stop any listening logic while AI speaks
                 intentionalStop = true;
@@ -456,7 +459,7 @@
             recognition.onstart = () => {
                 orb.className = "orb listening";
                 micBtn.querySelector('span').innerText = "AI Listening...";
-                forceSubmitBtn.style.display = 'inline-flex'; // Show force submit button
+                forceSubmitBtn.style.display = 'inline-flex'; 
             };
 
             recognition.onresult = (event) => {
@@ -477,7 +480,6 @@
                 
                 currentSessionTranscript = accumulatedTranscript + " " + interimTranscript;
                 
-                // NEW JS: Update the visual live transcript UI so user knows mic is working
                 liveTranscriptDisplay.innerText = `"${currentSessionTranscript.trim()}..."`;
 
                 // As long as the user is speaking, reset the 20-second doom clock
@@ -503,7 +505,7 @@
             currentSessionTranscript = "";
             intentionalStop = false;
             
-            liveTranscriptDisplay.innerText = ''; // Reset Live text
+            liveTranscriptDisplay.innerText = ''; 
             timerWarn.style.color = "var(--primary)";
             timerWarn.innerText = "Listening... Take your time. (Evaluates after 20s of silence)";
             
@@ -533,15 +535,14 @@
 
             // Hard 20-second silence cut-off
             silenceTimer = setTimeout(() => {
-                triggerSubmission(); // Use centralized submission
+                triggerSubmission(); 
             }, SILENCE_LIMIT_MS);
         }
 
-        // NEW JS: Centralized Submission Logic to handle both 20s timeout and Manual Submit
         function triggerSubmission() {
             clearInterval(visualSilenceInterval);
             clearTimeout(silenceTimer);
-            intentionalStop = true; // Tell onend NOT to restart
+            intentionalStop = true; 
             if(recognition) recognition.stop();
             
             let finalOutput = currentSessionTranscript.trim();
@@ -552,7 +553,6 @@
             }
         }
 
-        // NEW JS: Event Listener for Manual Force Submit Button
         forceSubmitBtn.addEventListener('click', () => {
             triggerSubmission();
         });
@@ -605,7 +605,7 @@
             clearTimeout(silenceTimer);
             clearInterval(visualSilenceInterval);
             
-            forceSubmitBtn.style.display = 'none'; // Hide submit button
+            forceSubmitBtn.style.display = 'none'; 
             
             // Speak the warning out loud
             const msg = new SpeechSynthesisUtterance("Warning " + warnings + ". " + reason);
@@ -633,8 +633,8 @@
             clearTimeout(silenceTimer);
             clearInterval(visualSilenceInterval);
             
-            forceSubmitBtn.style.display = 'none'; // Hide manual submit button
-            liveTranscriptDisplay.innerText = ''; // Clear live text
+            forceSubmitBtn.style.display = 'none'; 
+            liveTranscriptDisplay.innerText = ''; 
             
             if (text && text !== "" && !text.includes("[")) appendTranscript('user', text);
             
@@ -702,6 +702,10 @@
             
             document.getElementById('finalScore').innerText = `${data.marks}/100`;
             document.getElementById('recText').innerHTML = data.recommendations;
+            
+            // NEW JS: Set the dynamic download link for the PDF Report
+            document.getElementById('downloadPdfBtn').href = `/download_pdf/${sessionId}`;
+            lucide.createIcons();
             
             speak("Interview complete. All hardware released for privacy.", null);
         }
