@@ -145,7 +145,7 @@
         .step-content h4 { margin: 0 0 8px 0; font-size: 1.15rem; color: var(--text-dark); }
         .step-content p { margin: 0; color: var(--text-muted); font-size: 1rem; }
 
-        /* Pricing UI (New 4 Buttons & Cards) */
+        /* Pricing UI */
         .pricing-controls {
             display: flex; justify-content: center; gap: 10px; margin-bottom: 40px;
             background: var(--bg-card); padding: 8px; border-radius: 16px;
@@ -185,7 +185,7 @@
         .setup-container {
             background: var(--bg-card); border: 1px solid var(--border-color);
             border-radius: 24px; padding: 60px; box-shadow: var(--shadow-lg);
-            max-width: 850px; margin: 0 auto;
+            max-width: 850px; margin: 0 auto; position: relative; overflow: hidden;
         }
 
         /* Privacy Policy & Hardware Notice Box */
@@ -239,6 +239,7 @@
         #linkContainer {
             margin-top: 30px; padding: 30px; background: #ecfdf5;
             border: 1px solid var(--success); border-radius: 12px; text-align: center; display: none;
+            animation: fadeIn 0.5s ease;
         }
         #linkContainer p { color: #064e3b; font-weight: 800; margin-top: 0; font-size: 1.2rem; }
         #interviewLink {
@@ -254,6 +255,20 @@
         ul.bullet-list { padding-left: 20px; color: var(--text-muted); }
         ul.bullet-list li { margin-bottom: 12px; }
 
+        /* NEW CSS ADDITIONS FOR HYPE OVERLAY & ACTIVE PLAN BANNER */
+        .hype-overlay {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.98); z-index: 100;
+            flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; animation: fadeIn 0.3s ease; border-radius: 24px;
+        }
+        
+        .active-plan-banner {
+            background: var(--primary-light); color: var(--primary); padding: 12px 18px;
+            border-radius: 10px; margin-bottom: 25px; font-weight: 700; display: flex;
+            align-items: center; gap: 10px; border: 1px solid rgba(37, 99, 235, 0.2);
+            justify-content: center; font-size: 1.05rem;
+        }
     </style>
 </head>
 <body>
@@ -343,6 +358,11 @@
                 <h3>Evaluates Performance</h3>
                 <p>Shows a final score and detailed feedback at the end to highlight areas for improvement.</p>
             </div>
+            <div class="card">
+                <div class="card-icon"><i data-lucide="mic" style="width: 28px; height: 28px;"></i></div>
+                <h3>Infinite Speech Mode</h3>
+                <p>Speak naturally for as long as you need. The system evaluates you only after a 20-second pause.</p>
+            </div>
         </div>
     </section>
 
@@ -391,8 +411,19 @@
 
     <section id="setup" class="section section-light">
         <div class="setup-container">
+            
+            <div id="hypeOverlay" class="hype-overlay">
+                <i data-lucide="loader" class="lucide-spin" style="width: 64px; height: 64px; color: var(--primary); margin-bottom: 25px;"></i>
+                <h2 id="hypeText" style="color: var(--text-dark); font-size: 2.2rem; margin: 0 0 10px 0;">Analyzing Resume...</h2>
+                <p style="color: var(--text-muted); font-size: 1.15rem;">Please wait while we calibrate your AI interviewer.</p>
+            </div>
+
             <h2 class="section-title">Ready to begin?</h2>
             <p class="section-subtitle">Set your duration, upload your resume, and generate your secure portal link.</p>
+
+            <div class="active-plan-banner">
+                <i data-lucide="zap"></i> Active Plan Selected: <span id="planNameDisplay" style="text-transform: uppercase;">FREE</span>
+            </div>
 
             <div class="privacy-notice">
                 <div class="privacy-notice-icon">
@@ -529,6 +560,12 @@
     <script>
         lucide.createIcons();
 
+        // Check Local Storage for plan on page load
+        document.addEventListener("DOMContentLoaded", () => {
+            const savedPlan = localStorage.getItem('selectedPlan') || 'free';
+            document.getElementById('planNameDisplay').innerText = savedPlan;
+        });
+
         // Navbar Scroll Shadow & Active Link Highlighting
         const navbar = document.getElementById("navbar");
         const sections = document.querySelectorAll("section");
@@ -569,6 +606,7 @@
 
         function selectActivePlan(planName, btnElement) {
             localStorage.setItem('selectedPlan', planName);
+            document.getElementById('planNameDisplay').innerText = planName; // Update Banner UI
 
             const allCtaBtns = document.querySelectorAll('.pricing-cta-btn');
             allCtaBtns.forEach(btn => {
@@ -588,7 +626,17 @@
         
         fileInput.addEventListener('change', function(e) {
             if (e.target.files.length > 0) {
-                fileNameDisplay.innerHTML = `Selected: <span style="color: var(--text-dark);">${e.target.files[0].name}</span>`;
+                const file = e.target.files[0];
+                
+                // NEW ADDITION: Front-end File Size Validation (Max 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    fileInput.value = ""; // Clear the input
+                    fileNameDisplay.innerHTML = `<span style="color: var(--danger);">File too large! Max 5MB allowed.</span>`;
+                    alert("Please upload a PDF file smaller than 5MB.");
+                    return;
+                }
+
+                fileNameDisplay.innerHTML = `Selected: <span style="color: var(--text-dark);">${file.name}</span>`;
             }
         });
 
@@ -601,19 +649,33 @@
             
             localStorage.setItem('interviewDuration', duration);
             
-            btn.disabled = true;
-            btn.innerHTML = '<i data-lucide="loader" class="lucide-spin"></i> Preparing AI...';
-            lucide.createIcons();
+            // NEW ADDITION: Interactive Hype Loading Screen
+            const hypeOverlay = document.getElementById('hypeOverlay');
+            const hypeText = document.getElementById('hypeText');
+            hypeOverlay.style.display = 'flex';
+            
+            const hypeMessages = [
+                "Analyzing Resume Context...",
+                "Calibrating Neural Engine...",
+                "Preparing Custom Questions...",
+                "Establishing Secure Portal..."
+            ];
+            let hypeIndex = 0;
+            const hypeInterval = setInterval(() => {
+                hypeIndex = (hypeIndex + 1) % hypeMessages.length;
+                hypeText.innerText = hypeMessages[hypeIndex];
+            }, 1800);
 
             const formData = new FormData();
             formData.append('resume_file', fileInput.files[0]);
-            
-            // Sending the plan parameter to FastAPI
             formData.append('plan', localStorage.getItem('selectedPlan') || 'free');
 
             try {
                 const response = await fetch('/setup', { method: 'POST', body: formData });
                 const data = await response.json();
+                
+                clearInterval(hypeInterval);
+                hypeOverlay.style.display = 'none';
                 
                 if (data.interview_link) {
                     const linkEl = document.getElementById('interviewLink');
@@ -626,6 +688,8 @@
                     resetButton(btn);
                 }
             } catch (err) {
+                clearInterval(hypeInterval);
+                hypeOverlay.style.display = 'none';
                 alert("Server error. Please ensure your Python backend is running.");
                 resetButton(btn);
             }
