@@ -3,15 +3,19 @@ import io
 import uuid
 import json
 import traceback
+import re
 import uvicorn
 import PyPDF2
 from typing import Dict, Any
 from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# NEW IMPORT: FPDF for generating the downloadable interview report
+from fpdf import FPDF
 
 # IMPORT FIX: Upgraded to AsyncGroq for Render compatibility and zero lag
 from groq import AsyncGroq
@@ -386,6 +390,27 @@ Return exactly:
 Use <br><br> between sections.
 """
 
+# ==========================================================
+# PDF CLEANER HELPER
+# ==========================================================
+def clean_text_for_pdf(text: str) -> str:
+    """Removes HTML tags and handles emoji characters so FPDF doesn't crash."""
+    # Replace HTML line breaks with real line breaks
+    text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    # Remove all other HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Translate Emojis to text equivalents for standard PDF fonts
+    text = text.replace("✅", "[Strength] ")
+    text = text.replace("❌", "[Weakness] ")
+    text = text.replace("📈", "[Next Steps] ")
+    text = text.replace("🎯", "[Target] ")
+    text = text.replace("🔒", "[Locked] ")
+    text = text.replace("’", "'").replace("“", '"').replace("”", '"')
+    
+    # Safely encode to latin-1 to avoid PDF build errors
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
 
 async def evaluate_interview(session_id: str):
     session = get_session(session_id)
@@ -410,6 +435,10 @@ async def evaluate_interview(session_id: str):
             marks = 0
 
         marks = max(0, min(100, marks))
+
+        # IMPORTANT: Save data to session so the PDF generator can access it later
+        session["marks"] = marks
+        session["recommendations"] = recommendations
 
         return {
             "action": "finish",
@@ -563,7 +592,9 @@ async def setup_interview(
         "turn_count": 0,
         "silence_count": 0,
         "rejection_reason": None,
-        "plan": plan
+        "plan": plan,
+        "marks": 0,
+        "recommendations": ""
     }
 
     base_url = str(request.base_url).rstrip("/")
@@ -605,6 +636,72 @@ async def finish_interview_endpoint(session_id: str):
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Invalid Session")
     return JSONResponse(content=await evaluate_interview(session_id))
+
+
+# ==========================================================
+# NEW FEATURE: PDF DOWNLOAD ENDPOINT
+# ==========================================================
+@app.get("/download_pdf/{session_id}")
+async def download_pdf_report(session_id: str):
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session expired or invalid.")
+    
+    session = sessions[session_id]
+    
+    # Initialize PDF object
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # TITLE
+    pdf.set_font("Arial", 'B', 18)
+    pdf.cell(0, 10, txt="MockAI Interview Report", ln=True, align='C')
+    pdf.ln(5)
+    
+    # OVERVIEW SECTION
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 8, txt=f"Plan Selected: {session['plan'].upper()}", ln=True, align='L')
+    pdf.cell(0, 8, txt=f"Final Score: {session.get('marks', 0)} / 100", ln=True, align='L')
+    pdf.ln(8)
+    
+    # AI FEEDBACK SECTION
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, txt="Performance Feedback:", ln=True, align='L')
+    pdf.set_font("Arial", size=11)
+    
+    feedback_clean = clean_text_for_pdf(session.get("recommendations", "No feedback available."))
+    pdf.multi_cell(0, 6, txt=feedback_clean)
+    pdf.ln(10)
+    
+    # TRANSCRIPT SECTION
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, txt="Full Interview Transcript:", ln=True, align='L')
+    pdf.ln(2)
+    
+    for msg in session.get("history", []):
+        role = "AI Interviewer" if msg["role"] == "assistant" else "Candidate"
+        clean_content = clean_text_for_pdf(msg["content"])
+        
+        pdf.set_font("Arial", 'B', 11)
+        pdf.cell(0, 8, txt=f"{role}:", ln=True, align='L')
+        
+        pdf.set_font("Arial", size=11)
+        pdf.multi_cell(0, 6, txt=clean_content)
+        pdf.ln(4)
+        
+    # Output to raw bytes
+    pdf_out = pdf.output(dest='S')
+    
+    # Handle FPDF versioning differences (fpdf vs fpdf2 return types)
+    if isinstance(pdf_out, str):
+        pdf_bytes = pdf_out.encode('latin-1')
+    else:
+        pdf_bytes = bytes(pdf_out)
+        
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=MockAI_Report_{session_id}.pdf"}
+    )
 
 
 # Server Execution for Render
