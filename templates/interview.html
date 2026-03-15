@@ -42,7 +42,6 @@
             flex-direction: column; 
             align-items: center; 
             min-height: 100vh; 
-            /* SCROLL FIX APPLIED HERE */
             overflow-x: hidden;
             overflow-y: auto; 
             padding-bottom: 80px;
@@ -107,17 +106,49 @@
         .hw-dead { background: var(--success-light); color: var(--success); }
 
         #statusText { color: var(--text-dark); font-weight: 700; font-size: 1.2rem; margin-bottom: 10px; }
-        #timerWarning { font-weight: 700; color: var(--danger); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; height: 20px; }
+        #timerWarning { font-weight: 700; color: var(--danger); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; height: 20px; transition: color 0.3s ease; }
+
+        /* NEW CSS: Live Transcript */
+        #liveTranscript {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.95rem;
+            min-height: 24px;
+            margin-top: 10px;
+            max-width: 80%;
+            margin-inline: auto;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .btn-container {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+        }
 
         .mic-btn {
             background: var(--primary); border: none; padding: 16px 45px; border-radius: 12px;
             color: white; font-weight: 700; font-size: 1.1rem; cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 25px; 
-            display: flex; align-items: center; gap: 12px; margin-inline: auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex; align-items: center; gap: 12px;
             box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
         }
         .mic-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(37, 99, 235, 0.3); background: var(--primary-hover); }
         .mic-btn:disabled { background: var(--text-muted); cursor: not-allowed; box-shadow: none; }
+
+        /* NEW CSS: Force Submit Button */
+        #forceSubmitBtn {
+            background: var(--success);
+            box-shadow: 0 4px 6px rgba(5, 150, 105, 0.2);
+            display: none; /* Hidden by default */
+        }
+        #forceSubmitBtn:hover {
+            background: #047857;
+            box-shadow: 0 8px 15px rgba(5, 150, 105, 0.3);
+        }
 
         #transcript {
             margin-top: 35px; text-align: left; background: var(--bg-main);
@@ -204,11 +235,19 @@
         </div>
         
         <p id="statusText">Initializing Neural Engine...</p>
+        
+        <div id="liveTranscript"></div>
+        
         <p id="timerWarning"></p>
 
-        <button id="micBtn" class="mic-btn" disabled>
-            <i data-lucide="mic"></i> <span>Awaiting Logic...</span>
-        </button>
+        <div class="btn-container">
+            <button id="micBtn" class="mic-btn" disabled>
+                <i data-lucide="mic"></i> <span>Awaiting Logic...</span>
+            </button>
+            <button id="forceSubmitBtn" class="mic-btn">
+                <span>Submit Answer</span> <i data-lucide="send"></i>
+            </button>
+        </div>
 
         <div id="transcript"></div>
     </div>
@@ -269,7 +308,7 @@
         let globalSecondsRemaining = 0;
         let globalTimerInterval, lastFaceCheck = 0;
 
-        // --- NEW INFINITE AUDIO & 20s SILENCE ENGINE VARIABLES ---
+        // --- INFINITE AUDIO & SILENCE ENGINE VARIABLES ---
         let silenceTimer;
         let visualSilenceInterval;
         let silenceCountdown = 20;
@@ -281,8 +320,10 @@
         const orb = document.getElementById('aiOrb');
         const status = document.getElementById('statusText');
         const timerWarn = document.getElementById('timerWarning');
+        const liveTranscriptDisplay = document.getElementById('liveTranscript'); // NEW DOM element
         const sessionTimerDisplay = document.getElementById('sessionTimer').querySelector('span');
         const micBtn = document.getElementById('micBtn');
+        const forceSubmitBtn = document.getElementById('forceSubmitBtn'); // NEW DOM element
         const transcriptDiv = document.getElementById('transcript');
 
         // ==========================================
@@ -383,6 +424,8 @@
                 orb.className = "orb speaking";
                 status.innerText = "Recruiter is speaking...";
                 micBtn.disabled = true;
+                forceSubmitBtn.style.display = 'none'; // Hide submit button while AI talks
+                liveTranscriptDisplay.innerText = ''; // Clear live transcript
                 
                 // Stop any listening logic while AI speaks
                 intentionalStop = true;
@@ -413,6 +456,7 @@
             recognition.onstart = () => {
                 orb.className = "orb listening";
                 micBtn.querySelector('span').innerText = "AI Listening...";
+                forceSubmitBtn.style.display = 'inline-flex'; // Show force submit button
             };
 
             recognition.onresult = (event) => {
@@ -432,6 +476,9 @@
                 }
                 
                 currentSessionTranscript = accumulatedTranscript + " " + interimTranscript;
+                
+                // NEW JS: Update the visual live transcript UI so user knows mic is working
+                liveTranscriptDisplay.innerText = `"${currentSessionTranscript.trim()}..."`;
 
                 // As long as the user is speaking, reset the 20-second doom clock
                 if(currentSessionTranscript.trim().length > 0) {
@@ -456,6 +503,7 @@
             currentSessionTranscript = "";
             intentionalStop = false;
             
+            liveTranscriptDisplay.innerText = ''; // Reset Live text
             timerWarn.style.color = "var(--primary)";
             timerWarn.innerText = "Listening... Take your time. (Evaluates after 20s of silence)";
             
@@ -485,18 +533,29 @@
 
             // Hard 20-second silence cut-off
             silenceTimer = setTimeout(() => {
-                clearInterval(visualSilenceInterval);
-                intentionalStop = true; // Tell onend NOT to restart
-                if(recognition) recognition.stop();
-                
-                let finalOutput = currentSessionTranscript.trim();
-                if(finalOutput.length > 0) {
-                    submitToBackend(finalOutput);
-                } else {
-                    submitToBackend("[NO_ANSWER_TIMEOUT]");
-                }
+                triggerSubmission(); // Use centralized submission
             }, SILENCE_LIMIT_MS);
         }
+
+        // NEW JS: Centralized Submission Logic to handle both 20s timeout and Manual Submit
+        function triggerSubmission() {
+            clearInterval(visualSilenceInterval);
+            clearTimeout(silenceTimer);
+            intentionalStop = true; // Tell onend NOT to restart
+            if(recognition) recognition.stop();
+            
+            let finalOutput = currentSessionTranscript.trim();
+            if(finalOutput.length > 0) {
+                submitToBackend(finalOutput);
+            } else {
+                submitToBackend("[NO_ANSWER_TIMEOUT]");
+            }
+        }
+
+        // NEW JS: Event Listener for Manual Force Submit Button
+        forceSubmitBtn.addEventListener('click', () => {
+            triggerSubmission();
+        });
 
         // ==========================================
         // 4. PROCTORING & APP PROTECTION
@@ -546,6 +605,8 @@
             clearTimeout(silenceTimer);
             clearInterval(visualSilenceInterval);
             
+            forceSubmitBtn.style.display = 'none'; // Hide submit button
+            
             // Speak the warning out loud
             const msg = new SpeechSynthesisUtterance("Warning " + warnings + ". " + reason);
             msg.voice = femaleVoice;
@@ -571,6 +632,9 @@
             intentionalStop = true;
             clearTimeout(silenceTimer);
             clearInterval(visualSilenceInterval);
+            
+            forceSubmitBtn.style.display = 'none'; // Hide manual submit button
+            liveTranscriptDisplay.innerText = ''; // Clear live text
             
             if (text && text !== "" && !text.includes("[")) appendTranscript('user', text);
             
