@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Mock Interviewer | Student Practice Portal</title>
+    <title>AI Mock Interviewer | Proctored Practice Portal</title>
     
     <script src="https://unpkg.com/lucide@latest"></script>
     
@@ -35,10 +35,21 @@
             line-height: 1.6;
         }
 
+        /* Accessibility: Focus States */
+        *:focus-visible {
+            outline: 3px solid var(--primary-light);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        /* Missing CSS Fix: Spinner */
+        .lucide-spin { animation: spin 1.2s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
         /* Navigation Bar */
         .navbar {
             position: fixed; top: 0; width: 100%;
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
             box-shadow: var(--shadow-sm); border-bottom: 1px solid rgba(226, 232, 240, 0.6);
             z-index: 1000; display: flex; justify-content: space-between; align-items: center;
@@ -81,6 +92,7 @@
         }
 
         /* Container & Sections */
+        section { scroll-margin-top: 80px; } /* Prevents navbar overlap on anchor jump */
         .section { padding: 100px 5%; max-width: 1200px; margin: 0 auto; }
         .section-light { background: var(--bg-main); }
         .section-white { background: var(--bg-card); }
@@ -188,15 +200,22 @@
             max-width: 850px; margin: 0 auto; position: relative; overflow: hidden;
         }
 
-        /* Privacy Policy & Hardware Notice Box */
+        /* Truthful Privacy Notice */
         .privacy-notice {
             background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;
-            padding: 20px 24px; margin-bottom: 35px; display: flex; gap: 16px;
+            padding: 20px 24px; margin-bottom: 25px; display: flex; gap: 16px;
             align-items: flex-start; text-align: left;
         }
         .privacy-notice-icon { color: #16a34a; flex-shrink: 0; margin-top: 2px; }
         .privacy-notice-content h4 { margin: 0 0 8px 0; color: #15803d; font-size: 1.1rem; font-weight: 700; }
         .privacy-notice-content p { margin: 0; color: #166534; font-size: 0.95rem; line-height: 1.5; }
+
+        /* Inline Error Banner */
+        .error-banner {
+            display: none; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+            padding: 16px; border-radius: 12px; margin-bottom: 25px; text-align: left;
+            font-weight: 500; font-size: 0.95rem; align-items: center; gap: 10px;
+        }
 
         .input-label { display: block; margin-bottom: 10px; color: var(--text-dark); font-weight: 700; font-size: 1rem; }
 
@@ -217,10 +236,14 @@
             position: relative; width: 100%; height: 140px;
             border: 2px dashed rgba(37, 99, 235, 0.4); border-radius: 12px;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            background: var(--primary-light); transition: all 0.3s ease; cursor: pointer; margin-bottom: 35px;
+            background: var(--primary-light); transition: all 0.3s ease; cursor: pointer; margin-bottom: 25px;
         }
-        .file-upload-wrapper:hover { background: #dbeafe; border-color: var(--primary); }
+        .file-upload-wrapper.dragover { background: #dbeafe; border-color: var(--primary); }
         .file-upload-wrapper input[type="file"] { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+        .consent-wrapper { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 35px; }
+        .consent-wrapper input[type="checkbox"] { margin-top: 4px; cursor: pointer; width: 18px; height: 18px; }
+        .consent-wrapper label { font-size: 0.95rem; color: var(--text-muted); cursor: pointer; line-height: 1.5; }
 
         .btn {
             background: var(--primary); color: white; border: none; padding: 16px 32px;
@@ -229,12 +252,26 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-decoration: none;
             box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
         }
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             background: var(--primary-hover); transform: translateY(-3px);
             box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
         }
         .btn-large { width: 100%; padding: 20px; font-size: 1.2rem; }
-        .btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; opacity: 0.8; }
+
+        .hype-overlay {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.98); z-index: 100;
+            flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; animation: fadeIn 0.3s ease; border-radius: 24px;
+        }
+        
+        .active-plan-banner {
+            background: var(--primary-light); color: var(--primary); padding: 12px 18px;
+            border-radius: 10px; margin-bottom: 25px; font-weight: 700; display: flex;
+            align-items: center; gap: 10px; border: 1px solid rgba(37, 99, 235, 0.2);
+            justify-content: center; font-size: 1.05rem;
+        }
 
         #linkContainer {
             margin-top: 30px; padding: 30px; background: #ecfdf5;
@@ -255,19 +292,16 @@
         ul.bullet-list { padding-left: 20px; color: var(--text-muted); }
         ul.bullet-list li { margin-bottom: 12px; }
 
-        /* NEW CSS ADDITIONS FOR HYPE OVERLAY & ACTIVE PLAN BANNER */
-        .hype-overlay {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 255, 255, 0.98); z-index: 100;
-            flex-direction: column; justify-content: center; align-items: center;
-            text-align: center; animation: fadeIn 0.3s ease; border-radius: 24px;
-        }
-        
-        .active-plan-banner {
-            background: var(--primary-light); color: var(--primary); padding: 12px 18px;
-            border-radius: 10px; margin-bottom: 25px; font-weight: 700; display: flex;
-            align-items: center; gap: 10px; border: 1px solid rgba(37, 99, 235, 0.2);
-            justify-content: center; font-size: 1.05rem;
+        /* Responsive Mobile Adjustments */
+        @media (max-width: 768px) {
+            .navbar { padding: 0 20px; }
+            .nav-links { display: none; } /* Hide complex links on small screens */
+            .hero h1 { font-size: 2.5rem; }
+            .grid-2 { grid-template-columns: 1fr; gap: 30px; }
+            .section { padding: 60px 20px; }
+            .setup-container, .pricing-box { padding: 30px 20px; }
+            .pricing-controls { flex-wrap: wrap; }
+            .btn-large { font-size: 1.05rem; padding: 16px; }
         }
     </style>
 </head>
@@ -281,15 +315,15 @@
             <li><a href="#home" class="nav-item active">Home</a></li>
             <li><a href="#about" class="nav-item">Why Practice?</a></li>
             <li><a href="#features" class="nav-item">Features</a></li>
-            <li><a href="#setup" class="nav-item">Upload Resume</a></li>
+            <li><a href="#setup" class="nav-item">Setup Session</a></li>
             <li><a href="#pricing" class="nav-cta">Pricing Plans</a></li>
         </ul>
     </nav>
 
     <section id="home" class="section section-light hero">
-        <h1>Turn your resume into a<br><span>real interview practice</span> experience.</h1>
+        <h1>Turn your resume into a<br><span>proctored practice</span> experience.</h1>
         <p>Practice real interviews. Improve your answers. Build confidence.<br>AI Mock Interviewer helps students prepare for real interviews by analyzing their resume and giving a final score with feedback.</p>
-        <a href="#setup" class="btn">Start Mock Interview <i data-lucide="arrow-right"></i></a>
+        <a href="#setup" class="btn">Create Mock Interview Session <i data-lucide="arrow-right"></i></a>
     </section>
 
     <section id="about" class="section section-white">
@@ -415,14 +449,14 @@
             <div id="hypeOverlay" class="hype-overlay">
                 <i data-lucide="loader" class="lucide-spin" style="width: 64px; height: 64px; color: var(--primary); margin-bottom: 25px;"></i>
                 <h2 id="hypeText" style="color: var(--text-dark); font-size: 2.2rem; margin: 0 0 10px 0;">Analyzing Resume...</h2>
-                <p style="color: var(--text-muted); font-size: 1.15rem;">Please wait while we calibrate your AI interviewer.</p>
+                <p style="color: var(--text-muted); font-size: 1.15rem;">Please wait while we establish your secure session.</p>
             </div>
 
             <h2 class="section-title">Ready to begin?</h2>
             <p class="section-subtitle">Set your duration, upload your resume, and generate your secure portal link.</p>
 
-            <div class="active-plan-banner">
-                <i data-lucide="zap"></i> Active Plan Selected: <span id="planNameDisplay" style="text-transform: uppercase;">FREE</span>
+            <div class="active-plan-banner" id="planBannerDisplay">
+                <i data-lucide="zap"></i> Active Mode Selected: <span id="planNameDisplay" style="text-transform: uppercase;">FREE</span>
             </div>
 
             <div class="privacy-notice">
@@ -430,9 +464,14 @@
                     <i data-lucide="shield-check" style="width: 28px; height: 28px;"></i>
                 </div>
                 <div class="privacy-notice-content">
-                    <h4>Privacy & Security Guaranteed</h4>
-                    <p>Have doubts about turning on your camera or screen share? Don't worry! <strong>The camera, screen, and data only deal with your computer locally.</strong> Once the interview ends, the system will automatically turn off your camera, microphone, and stop screen sharing so you can fully relax.</p>
+                    <h4>Proctored Session Notice</h4>
+                    <p>Your resume text and interview responses are processed securely by our backend AI to generate custom questions and evaluate your performance. <strong>Your camera and microphone streams are processed locally in your browser to monitor focus and are never saved or sent to our servers.</strong> Hardware access is automatically revoked the moment the interview ends.</p>
                 </div>
+            </div>
+
+            <div id="errorBanner" class="error-banner" style="display: none;">
+                <i data-lucide="alert-circle" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+                <span id="errorText">An error occurred.</span>
             </div>
 
             <form id="setupForm">
@@ -446,15 +485,20 @@
                 </select>
 
                 <label class="input-label" for="resumeFile">Upload Resume (PDF Only)</label>
-                <div class="file-upload-wrapper">
+                <div class="file-upload-wrapper" id="dropZone">
                     <i data-lucide="upload-cloud" style="width: 48px; height: 48px; color: var(--primary);"></i>
                     <div style="color: var(--primary); font-weight: 600; font-size: 1.1rem; margin-top: 15px;" id="fileNameDisplay">Click or drag PDF here</div>
                     <div style="color: var(--text-muted); font-size: 0.9rem; margin-top: 5px;">Max file size: 5MB</div>
-                    <input type="file" id="resumeFile" accept=".pdf" required>
+                    <input type="file" id="resumeFile" accept="application/pdf" required>
+                </div>
+
+                <div class="consent-wrapper">
+                    <input type="checkbox" id="hardwareConsent" required>
+                    <label for="hardwareConsent">I understand this interview requires Camera and Microphone access during the session, and I agree to the privacy notice above.</label>
                 </div>
                 
                 <button type="submit" id="generateBtn" class="btn btn-large">
-                    Get Interview Score & Link <i data-lucide="arrow-right"></i>
+                    Generate Session Link <i data-lucide="arrow-right"></i>
                 </button>
             </form>
 
@@ -467,14 +511,14 @@
     </section>
 
     <section id="pricing" class="section section-white">
-        <h2 class="section-title">Affordable, Student-Friendly Pricing</h2>
-        <p class="section-subtitle">Start for free, or upgrade to unlock serious placement preparation tools.</p>
+        <h2 class="section-title">Available Interview Modes</h2>
+        <p class="section-subtitle">Select the difficulty and strictness of your AI Interviewer. Premium features are currently available for testing.</p>
 
         <div class="pricing-controls">
-            <button class="pricing-btn active" onclick="switchPricing('free', this)">Free</button>
-            <button class="pricing-btn" onclick="switchPricing('student', this)">Student</button>
-            <button class="pricing-btn" onclick="switchPricing('pro', this)">Pro</button>
-            <button class="pricing-btn" onclick="switchPricing('premium', this)">Premium</button>
+            <button class="pricing-btn active" id="btn-free">Free</button>
+            <button class="pricing-btn" id="btn-student">Student</button>
+            <button class="pricing-btn" id="btn-pro">Pro</button>
+            <button class="pricing-btn" id="btn-premium">Premium</button>
         </div>
 
         <div id="plan-free" class="pricing-view active">
@@ -482,17 +526,14 @@
                 <div class="pricing-header">
                     <h3>Free Tier</h3>
                     <p style="color: var(--text-muted); margin-top: 0;">Good for trying the product & building trust.</p>
-                    <p class="price">₹0<span> / forever</span></p>
+                    <p class="price">Friendly Coach</p>
                 </div>
                 <ul class="pricing-list">
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> 1 mock interview per week</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> 5–7 basic questions only</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Basic overall score</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Limited performance feedback</li>
-                    <li><i data-lucide="x-circle" style="color: var(--danger);"></i> No detailed analytics or error breakdown</li>
-                    <li><i data-lucide="x-circle" style="color: var(--danger);"></i> No downloadable reports</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Simple, beginner-friendly questions</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Focuses on basic HR and self-introduction</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Basic overall score & feedback</li>
                 </ul>
-                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('free', this)" data-original-text="Select Free Plan" style="width: 100%; margin-top: 30px; background: var(--text-dark);">Select Free Plan</button>
+                <button class="btn btn-large pricing-cta-btn" data-plan="free" data-original-text="Select Free Mode" style="width: 100%; margin-top: 30px; background: var(--text-dark);">Select Free Mode</button>
             </div>
         </div>
 
@@ -500,19 +541,15 @@
             <div class="pricing-box featured">
                 <div class="pricing-header">
                     <h3>Student Plan</h3>
-                    <p style="color: var(--text-muted); margin-top: 0;">Best for students with a small budget.</p>
-                    <p class="price">₹99<span> / month</span></p>
-                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">Or ₹999 / year</p>
+                    <p style="color: var(--text-muted); margin-top: 0;">Best for university placements.</p>
+                    <p class="price">Campus Proctor</p>
                 </div>
                 <ul class="pricing-list">
-                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> 8 mock interviews per month</li>
-                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Resume-based custom questions</li>
-                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Tricky and in-depth questioning</li>
-                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Score + Basic Performance Feedback</li>
-                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Face visibility warnings & Proctoring</li>
-                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Interview history dashboard</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Resume-based custom technical questions</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Beginner technical depth & project explanation</li>
+                    <li><i data-lucide="check-circle" style="color: var(--primary);"></i> Score + Mistake Analysis</li>
                 </ul>
-                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('student', this)" data-original-text="Upgrade to Student" style="width: 100%; margin-top: 30px;">Upgrade to Student</button>
+                <button class="btn btn-large pricing-cta-btn" data-plan="student" data-original-text="Select Student Mode" style="width: 100%; margin-top: 30px;">Select Student Mode</button>
             </div>
         </div>
 
@@ -520,19 +557,15 @@
             <div class="pricing-box">
                 <div class="pricing-header">
                     <h3>Pro Plan</h3>
-                    <p style="color: var(--text-muted); margin-top: 0;">For serious placement preparation.</p>
-                    <p class="price">₹299<span> / month</span></p>
-                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">Or ₹2999 / year</p>
+                    <p style="color: var(--text-muted); margin-top: 0;">For serious technical preparation.</p>
+                    <p class="price">Senior Tech</p>
                 </div>
                 <ul class="pricing-list">
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> 30 mock interviews per month</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Advanced interview feedback & Mistake analysis</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Technical + HR interview modes</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Role-based interview tracks</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Weak-area analysis & Suggestions</li>
-                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Downloadable PDF reports & Progress tracking</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Architecture, workflow, and debugging focus</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Strict follow-ups on vague answers</li>
+                    <li><i data-lucide="check-circle" style="color: var(--success);"></i> Advanced evaluation metrics</li>
                 </ul>
-                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('pro', this)" data-original-text="Upgrade to Pro" style="width: 100%; margin-top: 30px;">Upgrade to Pro</button>
+                <button class="btn btn-large pricing-cta-btn" data-plan="pro" data-original-text="Select Pro Mode" style="width: 100%; margin-top: 30px;">Select Pro Mode</button>
             </div>
         </div>
 
@@ -541,18 +574,14 @@
                 <div class="pricing-header">
                     <h3>Premium / Career</h3>
                     <p style="color: var(--text-muted); margin-top: 0;">The ultimate job-winning arsenal.</p>
-                    <p class="price">₹799<span> / month</span></p>
-                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 5px;">Or ₹7999 / year</p>
+                    <p class="price">Hiring Panel</p>
                 </div>
                 <ul class="pricing-list">
-                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Unlimited mock interviews</li>
-                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Company-specific interview simulations</li>
-                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Custom job-role interviews</li>
-                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Deep speech and answer quality analytics</li>
-                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Personalized improvement roadmap</li>
-                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Priority processing & Premium support</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> High pressure scenario reasoning</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Tests system thinking & product ownership</li>
+                    <li><i data-lucide="check-circle" style="color: var(--warning);"></i> Generates Ideal Answer coaching in PDF</li>
                 </ul>
-                <button class="btn btn-large pricing-cta-btn" onclick="selectActivePlan('premium', this)" data-original-text="Unlock Premium" style="width: 100%; margin-top: 30px; background: var(--text-dark);">Unlock Premium</button>
+                <button class="btn btn-large pricing-cta-btn" data-plan="premium" data-original-text="Select Premium Mode" style="width: 100%; margin-top: 30px; background: var(--text-dark);">Select Premium Mode</button>
             </div>
         </div>
     </section>
@@ -560,18 +589,30 @@
     <script>
         lucide.createIcons();
 
-        // Check Local Storage for plan on page load
+        // Safely Sync Plan State on Load
         document.addEventListener("DOMContentLoaded", () => {
             const savedPlan = localStorage.getItem('selectedPlan') || 'free';
             document.getElementById('planNameDisplay').innerText = savedPlan;
+            switchPricingView(savedPlan);
         });
 
-        // Navbar Scroll Shadow & Active Link Highlighting
+        // Throttled Navbar Scroll Logic
+        let isScrolling = false;
         const navbar = document.getElementById("navbar");
         const sections = document.querySelectorAll("section");
         const navItems = document.querySelectorAll(".nav-item, .nav-cta");
 
         window.addEventListener("scroll", () => {
+            if (!isScrolling) {
+                window.requestAnimationFrame(() => {
+                    handleScroll();
+                    isScrolling = false;
+                });
+                isScrolling = true;
+            }
+        });
+
+        function handleScroll() {
             if (window.scrollY > 20) {
                 navbar.style.boxShadow = "0 4px 6px -1px rgba(0,0,0,0.1)";
             } else {
@@ -581,7 +622,7 @@
             let current = "";
             sections.forEach((section) => {
                 const sectionTop = section.offsetTop;
-                if (scrollY >= sectionTop - 200) {
+                if (window.scrollY >= sectionTop - 200) {
                     current = section.getAttribute("id");
                 }
             });
@@ -592,73 +633,143 @@
                     li.classList.add("active");
                 }
             });
+        }
+
+        // Pricing UI Logic (Event Listeners instead of inline onclick)
+        const pricingBtns = document.querySelectorAll('.pricing-btn');
+        pricingBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const planId = e.target.id.replace('btn-', '');
+                switchPricingView(planId);
+            });
         });
 
-        function switchPricing(planId, btnElement) {
+        function switchPricingView(planId) {
             document.querySelectorAll('.pricing-btn').forEach(btn => btn.classList.remove('active'));
-            btnElement.classList.add('active');
+            const targetBtn = document.getElementById(`btn-${planId}`);
+            if(targetBtn) targetBtn.classList.add('active');
 
             document.querySelectorAll('.pricing-view').forEach(view => view.classList.remove('active'));
-            document.getElementById('plan-' + planId).classList.add('active');
-            
-            lucide.createIcons();
+            const targetView = document.getElementById(`plan-${planId}`);
+            if(targetView) targetView.classList.add('active');
         }
 
-        function selectActivePlan(planName, btnElement) {
-            localStorage.setItem('selectedPlan', planName);
-            document.getElementById('planNameDisplay').innerText = planName; // Update Banner UI
+        // Selection Logic
+        const ctaBtns = document.querySelectorAll('.pricing-cta-btn');
+        ctaBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const selectedPlan = e.target.getAttribute('data-plan');
+                localStorage.setItem('selectedPlan', selectedPlan);
+                document.getElementById('planNameDisplay').innerText = selectedPlan;
 
-            const allCtaBtns = document.querySelectorAll('.pricing-cta-btn');
-            allCtaBtns.forEach(btn => {
-                const defaultText = btn.getAttribute('data-original-text');
-                btn.innerHTML = defaultText;
-                btn.style.opacity = '1';
+                // Reset all buttons
+                ctaBtns.forEach(b => {
+                    b.innerHTML = b.getAttribute('data-original-text');
+                });
+
+                // Update clicked button
+                e.target.innerHTML = `<i data-lucide="check-circle"></i> Mode Selected`;
+                lucide.createIcons();
+
+                // Smooth scroll back to setup
+                document.getElementById('setup').scrollIntoView({ behavior: 'smooth' });
             });
+        });
 
-            btnElement.innerHTML = `<i data-lucide="check-circle"></i> Plan Selected`;
-            lucide.createIcons();
-
-            alert(`Success! You have selected the ${planName.toUpperCase()} plan. This preference has been saved.`);
-        }
-
+        // Real Drag & Drop & File Validation Logic
         const fileInput = document.getElementById('resumeFile');
         const fileNameDisplay = document.getElementById('fileNameDisplay');
-        
-        fileInput.addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                const file = e.target.files[0];
-                
-                // NEW ADDITION: Front-end File Size Validation (Max 5MB)
-                if (file.size > 5 * 1024 * 1024) {
-                    fileInput.value = ""; // Clear the input
-                    fileNameDisplay.innerHTML = `<span style="color: var(--danger);">File too large! Max 5MB allowed.</span>`;
-                    alert("Please upload a PDF file smaller than 5MB.");
-                    return;
-                }
+        const dropZone = document.getElementById('dropZone');
+        const errorBanner = document.getElementById('errorBanner');
+        const errorText = document.getElementById('errorText');
 
-                fileNameDisplay.innerHTML = `Selected: <span style="color: var(--text-dark);">${file.name}</span>`;
+        function showError(msg) {
+            errorBanner.style.display = 'flex';
+            errorText.innerText = msg;
+            // Scroll to error
+            document.getElementById('setup').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function clearError() {
+            errorBanner.style.display = 'none';
+        }
+
+        function processFile(file) {
+            clearError();
+            if (!file) return;
+
+            // Strict Frontend Validation
+            if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith('.pdf')) {
+                fileInput.value = "";
+                fileNameDisplay.innerHTML = `<span style="color: var(--danger);">Invalid file. PDF strictly required.</span>`;
+                showError("Please upload a valid PDF document.");
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                fileInput.value = "";
+                fileNameDisplay.innerHTML = `<span style="color: var(--danger);">File too large! Max 5MB allowed.</span>`;
+                showError("Please upload a PDF file smaller than 5MB.");
+                return;
+            }
+
+            fileNameDisplay.innerHTML = `Ready: <span style="color: var(--text-dark); font-weight:700;">${file.name}</span>`;
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) processFile(e.target.files[0]);
+        });
+
+        // Drag and Drop Events
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                processFile(e.dataTransfer.files[0]);
             }
         });
 
+        // Form Submission & Secure Session Initialization
         document.getElementById('setupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            clearError();
+
             const btn = document.getElementById('generateBtn');
             const duration = document.getElementById('durationSelect').value;
             
-            if (!fileInput.files[0]) return alert("Please upload a PDF resume.");
-            
+            if (!fileInput.files[0]) {
+                showError("Please upload your PDF resume context.");
+                return;
+            }
+
+            // Save duration locally for the timer UI
             localStorage.setItem('interviewDuration', duration);
             
-            // NEW ADDITION: Interactive Hype Loading Screen
+            // True Button Loading State
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="lucide-spin"></i> Initializing Environment...';
+            lucide.createIcons();
+
             const hypeOverlay = document.getElementById('hypeOverlay');
             const hypeText = document.getElementById('hypeText');
             hypeOverlay.style.display = 'flex';
             
             const hypeMessages = [
-                "Analyzing Resume Context...",
-                "Calibrating Neural Engine...",
-                "Preparing Custom Questions...",
-                "Establishing Secure Portal..."
+                "Parsing Document Context...",
+                "Calibrating Neural Models...",
+                "Establishing Secure Channel...",
+                "Generating Interview Link..."
             ];
             let hypeIndex = 0;
             const hypeInterval = setInterval(() => {
@@ -672,34 +783,39 @@
 
             try {
                 const response = await fetch('/setup', { method: 'POST', body: formData });
+                
+                // Safe JSON parsing check
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Server rejected the request.");
+                }
+
                 const data = await response.json();
                 
-                clearInterval(hypeInterval);
-                hypeOverlay.style.display = 'none';
-                
-                if (data.interview_link) {
+                if (data.interview_link && data.access_token) {
+                    // IMPORTANT: Secure Token Storage for backend auth
+                    localStorage.setItem('access_token', data.access_token);
+                    
                     const linkEl = document.getElementById('interviewLink');
                     linkEl.href = data.interview_link;
                     
                     document.getElementById('setupForm').style.display = 'none';
                     document.getElementById('linkContainer').style.display = 'block';
                 } else {
-                    alert("Error establishing connection.");
-                    resetButton(btn);
+                    throw new Error("Invalid payload received from secure server.");
                 }
             } catch (err) {
+                showError("Configuration Failed: " + (err.message || "Please ensure the backend is running."));
+                
+                // Restore button state gracefully
+                btn.disabled = false;
+                btn.innerHTML = 'Generate Session Link <i data-lucide="arrow-right"></i>';
+                lucide.createIcons();
+            } finally {
                 clearInterval(hypeInterval);
                 hypeOverlay.style.display = 'none';
-                alert("Server error. Please ensure your Python backend is running.");
-                resetButton(btn);
             }
         });
-
-        function resetButton(btn) {
-            btn.disabled = false;
-            btn.innerHTML = 'Get Interview Score & Link <i data-lucide="arrow-right"></i>';
-            lucide.createIcons();
-        }
     </script>
 </body>
 </html>
