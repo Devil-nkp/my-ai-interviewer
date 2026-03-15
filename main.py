@@ -156,6 +156,8 @@ GLOBAL RULES:
 - Do not ask multiple questions.
 - Do not use long paragraphs.
 - Do not become robotic.
+- HIDDEN CLASSIFICATIONS: NEVER output your internal classification tags (like 'CLASSIFICATION: STRONG' or 'VAGUE:') to the user. Just speak the natural response.
+- HANDLING "DON'T KNOW": If the candidate says they forgot, don't recollect, or don't know: DO NOT keep asking about it. Briefly provide the correct answer or context, then move on to a completely new question.
 """
 
     if plan == "free":
@@ -463,6 +465,18 @@ async def get_ai_response(session_id, user_text):
     cfg = PLAN_CONFIG[plan]
 
     user_text = (user_text or "").strip()
+    
+    # === NEW: EXIT INTERVIEW DETECTION ===
+    exit_phrases = [
+        "exit interview", "end interview", "end the interview", 
+        "stop the interview", "we can end it", "we can end up", 
+        "that's it for now", "wrap it up"
+    ]
+    if any(phrase in user_text.lower() for phrase in exit_phrases) or "[USER_REQUESTED_END]" in user_text:
+        session["history"].append({"role": "user", "content": user_text})
+        return await evaluate_interview(session_id)
+    # =====================================
+
     is_time_up = "[SYSTEM_DURATION_EXPIRED]" in user_text
     is_timeout = "[NO_ANSWER_TIMEOUT]" in user_text
 
@@ -492,6 +506,11 @@ async def get_ai_response(session_id, user_text):
             ],
             temperature=cfg["temperature"]
         )
+        
+        # Clean accidental classification leakage
+        ai_msg = re.sub(r'^(CLASSIFICATION:?\s*\w+\s*\|?\s*)', '', ai_msg, flags=re.IGNORECASE).strip()
+        ai_msg = re.sub(r'^(\**\b(Strong|Partial|Vague|Wrong)\b\**:\s*)', '', ai_msg, flags=re.IGNORECASE).strip()
+
         session["history"].append({"role": "assistant", "content": ai_msg})
         return {
             "action": "continue",
@@ -512,6 +531,10 @@ async def get_ai_response(session_id, user_text):
         ] + session["history"],
         temperature=cfg["temperature"]
     )
+
+    # Clean accidental classification leakage
+    ai_msg = re.sub(r'^(CLASSIFICATION:?\s*\w+\s*\|?\s*)', '', ai_msg, flags=re.IGNORECASE).strip()
+    ai_msg = re.sub(r'^(\**\b(Strong|Partial|Vague|Wrong)\b\**:\s*)', '', ai_msg, flags=re.IGNORECASE).strip()
 
     session["history"].append({"role": "assistant", "content": ai_msg})
 
